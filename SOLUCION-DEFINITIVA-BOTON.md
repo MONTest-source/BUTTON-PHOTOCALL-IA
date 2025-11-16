@@ -1,4 +1,4 @@
-# Solución para Pulso de Botón en TouchDesigner
+# Solución Definitiva para el Botón en TouchDesigner
 
 ## ✅ Solución Implementada y Funcionando
 
@@ -32,7 +32,7 @@ def onReceiveText(dat, rowIndex, message):
 
 ---
 
-## Por Qué Esta Solución Funciona
+## Por Qué Funciona
 
 1. **`btn.click()`** es el método nativo de TouchDesigner para simular un click real
 2. Simula tanto el **press** (down) como el **release** (up) del botón
@@ -61,27 +61,11 @@ def onReceiveText(dat, rowIndex, message):
 
 ---
 
-## Notas Importantes
+## Notas
 
 - **NO** pases ningún parámetro a `click()` - déjalo vacío: `btn.click()`
 - Si pasas un parámetro como `btn.click(1)`, el botón se quedará activo
 - El método `click()` sin parámetros simula un click completo (press + release)
-
----
-
-## Troubleshooting
-
-### El botón no se activa
-
-1. **Verifica que el WebSocket esté conectado**
-2. **Verifica el nombre del botón** - debe ser exactamente `button1`
-3. **Verifica los mensajes recibidos** - agrega `print()` para debugging
-4. **Verifica que el callback esté habilitado** en el WebSocket DAT
-
-### El botón se activa pero no hace nada
-
-1. **Verifica el tipo de botón** - debe ser **"Momentary"**
-2. **Verifica el callback del botón** - con `btn.click()`, el callback debería ejecutarse automáticamente
 
 ---
 
