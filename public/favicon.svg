@@ -1,19 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <!-- Fondo oscuro -->
   <rect width="64" height="64" fill="#0B0B0F" rx="8"/>
   
   <!-- Efecto anaglífico para P -->
-  <text x="6" y="38" font-family="Arial, sans-serif" font-weight="700" font-size="28" fill="#FF0000" opacity="0.8">P</text>
-  <text x="8" y="40" font-family="Arial, sans-serif" font-weight="700" font-size="28" fill="#00FFFF" opacity="0.8">P</text>
-  <text x="7" y="39" font-family="Arial, sans-serif" font-weight="700" font-size="28" fill="#FFFFFF">P</text>
+  <text x="3" y="40" font-family="Arial, sans-serif" font-weight="700" font-size="22" fill="#FF0000" opacity="0.8">P</text>
+  <text x="5" y="42" font-family="Arial, sans-serif" font-weight="700" font-size="22" fill="#00FFFF" opacity="0.8">P</text>
+  <text x="4" y="41" font-family="Arial, sans-serif" font-weight="700" font-size="22" fill="#FFFFFF">P</text>
   
   <!-- Efecto anaglífico para I -->
-  <text x="20" y="38" font-family="Arial, sans-serif" font-weight="700" font-size="28" fill="#FF0000" opacity="0.8">I</text>
-  <text x="22" y="40" font-family="Arial, sans-serif" font-weight="700" font-size="28" fill="#00FFFF" opacity="0.8">I</text>
-  <text x="21" y="39" font-family="Arial, sans-serif" font-weight="700" font-size="28" fill="#FFFFFF">I</text>
+  <text x="16" y="40" font-family="Arial, sans-serif" font-weight="700" font-size="22" fill="#FF0000" opacity="0.8">I</text>
+  <text x="18" y="42" font-family="Arial, sans-serif" font-weight="700" font-size="22" fill="#00FFFF" opacity="0.8">I</text>
+  <text x="17" y="41" font-family="Arial, sans-serif" font-weight="700" font-size="22" fill="#FFFFFF">I</text>
   
   <!-- Efecto anaglífico para A -->
-  <text x="30" y="38" font-family="Arial, sans-serif" font-weight="700" font-size="28" fill="#FF0000" opacity="0.8">A</text>
-  <text x="32" y="40" font-family="Arial, sans-serif" font-weight="700" font-size="28" fill="#00FFFF" opacity="0.8">A</text>
-  <text x="31" y="39" font-family="Arial, sans-serif" font-weight="700" font-size="28" fill="#FFFFFF">A</text>
+  <text x="26" y="40" font-family="Arial, sans-serif" font-weight="700" font-size="22" fill="#FF0000" opacity="0.8">A</text>
+  <text x="28" y="42" font-family="Arial, sans-serif" font-weight="700" font-size="22" fill="#00FFFF" opacity="0.8">A</text>
+  <text x="27" y="41" font-family="Arial, sans-serif" font-weight="700" font-size="22" fill="#FFFFFF">A</text>
 </svg>
