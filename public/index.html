@@ -780,8 +780,8 @@
             }
             
             addBat(startX, startY, count = 1) {
-                // OPTIMIZACIÓN: Reducir límite de murciélagos (de 80 a 50)
-                if (this.bats.length > 50) {
+                // OPTIMIZACIÓN: Reducir límite de murciélagos (de 50 a 35)
+                if (this.bats.length > 35) {
                     return; // No agregar más si ya hay muchos
                 }
                 
@@ -887,11 +887,12 @@
                 }
             }
             
-            drawBat(bat) {
-                // OPTIMIZACIÓN: Simplificar física de curva (menos cálculos)
-                if (bat.curveAmount !== undefined && Math.floor(bat.distance) % 5 === 0) { // Aplicar curva cada 5 unidades de distancia
+            // OPTIMIZACIÓN: Separar actualización de física del dibujado
+            updateBat(bat) {
+                // Simplificar física de curva (menos cálculos)
+                if (bat.curveAmount !== undefined && Math.floor(bat.distance) % 5 === 0) {
                     const perpendicularAngle = Math.atan2(bat.vy, bat.vx) + (Math.PI / 2) * bat.curveDirection;
-                    const curveForce = bat.curveAmount * 0.1; // Reducido de 0.15
+                    const curveForce = bat.curveAmount * 0.1;
                     bat.vx += Math.cos(perpendicularAngle) * curveForce;
                     bat.vy += Math.sin(perpendicularAngle) * curveForce;
                 }
@@ -899,31 +900,28 @@
                 // Actualizar posición y animación de alas
                 bat.x += bat.vx;
                 bat.y += bat.vy;
-                // OPTIMIZACIÓN: Usar distancia aproximada (más rápido que sqrt)
                 bat.distance += Math.abs(bat.vx) + Math.abs(bat.vy);
                 bat.wingPhase += bat.wingSpeed;
                 
-                // OPTIMIZACIÓN: Rotación simplificada (menos cálculos)
+                // Rotación simplificada
                 const targetAngle = Math.atan2(bat.vy, bat.vx);
                 let angleDiff = targetAngle - bat.angle;
-                // Normalizar diferencia de ángulo (versión optimizada)
                 if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                 else if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                bat.angle += angleDiff * 0.2; // Aumentado de 0.15 para menos frames de interpolación
+                bat.angle += angleDiff * 0.2;
                 
                 // Reducir opacidad con la distancia
                 bat.opacity = Math.max(0, 1 - (bat.distance / bat.maxDistance));
                 
-                // Eliminar murciélagos que están muy lejos o muy transparentes
-                if (bat.distance > bat.maxDistance || bat.opacity < 0.02) {
-                    return false;
-                }
+                // Retornar si debe eliminarse
+                return bat.distance <= bat.maxDistance && bat.opacity >= 0.02;
+            }
+            
+            drawBat(bat) {
+                // OPTIMIZACIÓN CRÍTICA: Eliminar shadowBlur completamente (muy costoso)
+                // En su lugar, usar stroke más grueso y múltiples capas simples
                 
-                // Guardar contexto
                 this.ctx.save();
-                
-                // OPTIMIZACIÓN: Reducir glow para mejor rendimiento
-                const glowIntensity = bat.opacity * bat.glow * 0.7; // Reducido
                 this.ctx.globalAlpha = bat.opacity;
                 
                 // Dibujar murciélago
@@ -932,50 +930,76 @@
                 
                 const scale = bat.size / 140;
                 
-                // OPTIMIZACIÓN: Reducir shadowBlur para mejor rendimiento
-                this.ctx.shadowBlur = 25 * bat.glow; // Reducido de 40
-                this.ctx.shadowColor = `rgba(0, 224, 255, ${glowIntensity})`;
-                
                 // Animación de alas
                 const wingSpread = Math.sin(bat.wingPhase) * 0.3 + 0.7;
                 const wingScaleY = wingSpread;
                 
-                // Dibujar el path del murciélago
+                // OPTIMIZACIÓN: Path simplificado - usar solo puntos clave (reducir de 20 a 8-10 puntos)
                 this.ctx.beginPath();
                 const points = this.batShape;
-                this.ctx.moveTo(points[0][0] * scale, points[0][1] * scale * wingScaleY);
+                // Usar solo puntos clave: inicio, picos superiores, centro, picos inferiores, fin
+                const keyPoints = [0, 2, 6, 10, 12, 14, 16, 18]; // Índices de puntos clave
+                this.ctx.moveTo(points[keyPoints[0]][0] * scale, points[keyPoints[0]][1] * scale * wingScaleY);
                 
-                // OPTIMIZACIÓN: Dibujar cada 2 puntos en lugar de todos (reduce cálculos)
-                for (let i = 2; i < points.length; i += 2) {
-                    const [x, y] = points[i];
+                for (let i = 1; i < keyPoints.length; i++) {
+                    const idx = keyPoints[i];
+                    const [x, y] = points[idx];
                     this.ctx.lineTo(x * scale, y * scale * wingScaleY);
                 }
                 this.ctx.closePath();
                 
+                // OPTIMIZACIÓN: Glow simplificado sin shadowBlur - usar stroke más grueso y opacidad
+                const glowOpacity = bat.opacity * bat.glow * 0.5;
+                
+                // Dibujar glow exterior (stroke más grueso)
+                this.ctx.strokeStyle = `rgba(0, 224, 255, ${glowOpacity * 0.3})`;
+                this.ctx.lineWidth = 3;
+                this.ctx.stroke();
+                
+                // Dibujar cuerpo principal
                 this.ctx.fillStyle = '#000000';
                 this.ctx.fill();
-                this.ctx.strokeStyle = `rgba(0, 224, 255, ${bat.opacity * 0.6})`; // Reducido
-                this.ctx.lineWidth = 1;
+                
+                // Dibujar contorno brillante
+                this.ctx.strokeStyle = `rgba(0, 224, 255, ${bat.opacity * 0.8})`;
+                this.ctx.lineWidth = 1.5;
                 this.ctx.stroke();
                 
                 this.ctx.restore();
-                return true;
             }
             
             drawBats() {
-                // OPTIMIZACIÓN: Reducir límite (de 80 a 50)
-                if (this.bats.length > 50) {
-                    this.bats = this.bats.slice(-50);
+                // OPTIMIZACIÓN: Reducir límite (de 50 a 35 para mejor rendimiento)
+                if (this.bats.length > 35) {
+                    this.bats = this.bats.slice(-35);
                 }
-                // Filtrar y dibujar murciélagos
-                this.bats = this.bats.filter(bat => this.drawBat(bat));
+                
+                // OPTIMIZACIÓN CRÍTICA: Separar actualización de física del dibujado
+                // Esto evita que filter() llame drawBat() dos veces (una para verificar, otra para dibujar)
+                const aliveBats = [];
+                for (let i = 0; i < this.bats.length; i++) {
+                    const bat = this.bats[i];
+                    if (this.updateBat(bat)) {
+                        aliveBats.push(bat);
+                        this.drawBat(bat);
+                    }
+                }
+                this.bats = aliveBats;
             }
             
             animate() {
                 const now = performance.now();
                 
-                // OPTIMIZACIÓN: Saltar frames en modo reducido (cada 2 frames)
-                if (performanceMode === 'reduced') {
+                // OPTIMIZACIÓN: Saltar frames cuando hay murciélagos activos (mayor carga)
+                if (this.bats.length > 0) {
+                    // Si hay murciélagos, reducir FPS a la mitad para mejor rendimiento
+                    this.frameSkip++;
+                    if (this.frameSkip % 2 === 0) {
+                        this.animationId = requestAnimationFrame(() => this.animate());
+                        return;
+                    }
+                } else if (performanceMode === 'reduced') {
+                    // Si no hay murciélagos pero estamos en modo reducido, mantener frame skipping
                     this.frameSkip++;
                     if (this.frameSkip % 2 === 0) {
                         this.animationId = requestAnimationFrame(() => this.animate());
@@ -1006,9 +1030,9 @@
                 const startX = x !== undefined ? x : this.canvas.width / 2;
                 const startY = y !== undefined ? y : this.canvas.height / 2;
                 
-                // OPTIMIZACIÓN: Reducir número de murciélagos (de 15/25 a 10/18)
-                let batCount = 10;
-                if (intensity === 'high') batCount = 18;
+                // OPTIMIZACIÓN: Reducir número de murciélagos aún más (de 10/18 a 8/12)
+                let batCount = 8;
+                if (intensity === 'high') batCount = 12;
                 
                 // Generar murciélagos en ráfagas escalonadas para efecto de enjambre
                 for (let i = 0; i < batCount; i++) {
