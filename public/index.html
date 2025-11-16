@@ -89,6 +89,9 @@
             height: 100%;
             z-index: -1;
             pointer-events: none;
+            /* Optimizaciones de rendimiento */
+            will-change: contents;
+            transform: translateZ(0); /* Forzar aceleración por hardware */
         }
 
         /* ============================================
@@ -194,21 +197,22 @@
             isolation: isolate;
             outline: none !important;
             opacity: 1 !important; /* Siempre sólido */
+            /* Optimizaciones de rendimiento */
+            will-change: transform;
+            transform: translateZ(0); /* Aceleración por hardware */
+            backface-visibility: hidden;
             
-            /* Efecto 3D intensificado con múltiples sombras */
+            /* Efecto 3D optimizado - reducido número de sombras para mejor rendimiento */
             box-shadow: 
-                /* Sombras exteriores profundas (elevación 3D) */
+                /* Sombras exteriores (consolidadas) */
                 0 12px 24px rgba(0, 0, 0, 0.8),
-                0 8px 16px rgba(0, 0, 0, 0.6),
                 0 4px 8px rgba(0, 0, 0, 0.4),
-                /* Sombras interiores superiores (bevel pronunciado) */
+                /* Sombras interiores (consolidadas) */
                 inset 0 4px 8px rgba(0, 224, 255, 0.2),
-                inset 0 2px 4px rgba(255, 255, 255, 0.15),
                 inset 0 -2px 4px rgba(0, 0, 0, 0.3),
-                /* Borde neón con glow intenso */
+                /* Borde neón con glow (reducido) */
                 0 0 0 3px rgba(0, 224, 255, 0.4),
-                0 0 30px rgba(0, 224, 255, 0.3),
-                0 0 60px rgba(0, 224, 255, 0.15);
+                0 0 40px rgba(0, 224, 255, 0.25);
         }
 
         /* Capa de borde neón animado */
@@ -261,22 +265,19 @@
             will-change: transform, opacity, left, top;
         }
 
-        /* Hover: Elevación 3D aumentada */
+        /* Hover: Elevación 3D aumentada - optimizado */
         .btn-primary:hover:not(:disabled) {
-            transform: translateY(-6px) scale(1.02);
+            transform: translateY(-6px) scale(1.02) translateZ(0);
             background: linear-gradient(145deg, #121218, #0A0A0F);
             box-shadow: 
-                /* Sombras exteriores más pronunciadas */
+                /* Sombras exteriores (consolidadas) */
                 0 16px 32px rgba(0, 0, 0, 0.9),
-                0 12px 24px rgba(0, 0, 0, 0.7),
                 0 6px 12px rgba(0, 0, 0, 0.5),
-                /* Glow neón intensificado */
-                0 0 50px rgba(0, 224, 255, 0.5),
-                0 0 80px rgba(0, 224, 255, 0.3),
-                0 0 120px rgba(0, 224, 255, 0.15),
-                /* Bevel interior más pronunciado */
+                /* Glow neón (reducido para mejor rendimiento) */
+                0 0 60px rgba(0, 224, 255, 0.4),
+                0 0 100px rgba(0, 224, 255, 0.2),
+                /* Bevel interior (consolidado) */
                 inset 0 5px 10px rgba(0, 224, 255, 0.25),
-                inset 0 2px 5px rgba(255, 255, 255, 0.2),
                 inset 0 -3px 6px rgba(0, 0, 0, 0.4),
                 /* Borde brillante */
                 0 0 0 3px rgba(0, 224, 255, 0.7);
@@ -334,10 +335,13 @@
             opacity: 0;
             box-shadow: 
                 0 0 8px rgba(0, 224, 255, 1),
-                0 0 16px rgba(0, 224, 255, 0.6),
-                0 0 24px rgba(0, 224, 255, 0.3);
+                0 0 16px rgba(0, 224, 255, 0.6);
             animation: particleFloat 1.5s ease-out forwards;
             pointer-events: none;
+            /* Optimizaciones de rendimiento */
+            will-change: transform, opacity;
+            transform: translateZ(0);
+            backface-visibility: hidden;
         }
 
         @keyframes particleFloat {
@@ -1603,6 +1607,43 @@
         let wsConnection = null;
         // WebSocket URL - Se adapta automáticamente a HTTP/HTTPS y ws/wss
         const WS_URL = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host;
+        
+        // ============================================
+        // PERFORMANCE DETECTION & OPTIMIZATION
+        // ============================================
+        let performanceMode = 'normal'; // 'normal', 'reduced'
+        
+        // Detectar rendimiento del dispositivo
+        function detectPerformanceMode() {
+            // Detectar dispositivos móviles o navegadores lentos
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isLowEnd = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2;
+            const hasReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            
+            // Detectar FPS mediante prueba rápida
+            let lastTime = performance.now();
+            let frameCount = 0;
+            let testFrames = 0;
+            
+            function testFPS() {
+                frameCount++;
+                testFrames++;
+                
+                if (testFrames >= 30) {
+                    const fps = (frameCount / ((performance.now() - lastTime) / 1000));
+                    if (fps < 30 || isMobile || isLowEnd || hasReducedMotion) {
+                        performanceMode = 'reduced';
+                        console.log('[Performance] Modo reducido activado (FPS:', fps.toFixed(1), ')');
+                    }
+                    return;
+                }
+                requestAnimationFrame(testFPS);
+            }
+            requestAnimationFrame(testFPS);
+        }
+        
+        // Iniciar detección de rendimiento
+        detectPerformanceMode();
 
         // ============================================
         // DOM SELECTORS
@@ -2109,6 +2150,8 @@
                 this.waves = [];
                 this.bats = [];
                 this.animationId = null;
+                this.lastFrameTime = 0;
+                this.frameSkip = 0; // Para reducir frames en modo reducido
                 
                 // Forma del murciélago extraída del JSON Lottie (puntos del path)
                 this.batShape = [
@@ -2150,8 +2193,11 @@
             }
             
             createWaves() {
+                // OPTIMIZACIÓN: Reducir número de olas en modo reducido
+                const waveCount = performanceMode === 'reduced' ? 2 : 4;
+                
                 // Olas con perspectiva 3D (vista desde arriba)
-                this.waves = [
+                const allWaves = [
                     {
                         centerX: this.canvas.width * 0.3,
                         centerY: this.canvas.height * 0.3,
@@ -2197,11 +2243,13 @@
                         depth: 0.9
                     }
                 ];
+                
+                this.waves = allWaves.slice(0, waveCount);
             }
             
             addBat(startX, startY, count = 1) {
-                // Limitar número total de murciélagos para mejor rendimiento
-                if (this.bats.length > 80) {
+                // OPTIMIZACIÓN: Reducir límite de murciélagos (de 80 a 50)
+                if (this.bats.length > 50) {
                     return; // No agregar más si ya hay muchos
                 }
                 
@@ -2251,35 +2299,17 @@
             }
             
             drawWave(wave) {
-                // Dibujar ola con perspectiva 3D (vista desde arriba)
-                const segments = 64;
-                const points = [];
+                // OPTIMIZACIÓN: Reducir segmentos para mejor rendimiento (de 64 a 32)
+                const segments = 32;
                 
-                // Calcular puntos de la ola circular con altura 3D
-                for (let i = 0; i <= segments; i++) {
-                    const angle = (Math.PI * 2 / segments) * i;
-                    const distance = wave.radius;
-                    
-                    // Altura de la ola basada en el ángulo y fase
-                    const height = Math.sin((angle * wave.frequency * 10) + wave.phase) * wave.amplitude;
-                    
-                    // Posición 2D proyectada desde perspectiva 3D
-                    const x = wave.centerX + Math.cos(angle) * distance;
-                    const y = wave.centerY + Math.sin(angle) * distance;
-                    
-                    // Ajustar posición Y basado en altura (simular profundidad)
-                    const depthY = y + (height * wave.depth);
-                    
-                    points.push({ x, y: depthY, height });
-                }
-                
-                // Dibujar círculos concéntricos para efecto 3D
-                for (let ring = 0; ring < 3; ring++) {
-                    const ringRadius = wave.radius - (ring * 20);
+                // OPTIMIZACIÓN: Reducir número de anillos concéntricos (de 3 a 2)
+                for (let ring = 0; ring < 2; ring++) {
+                    const ringRadius = wave.radius - (ring * 25);
                     const ringAmplitude = wave.amplitude * (1 - ring * 0.3);
                     
                     this.ctx.beginPath();
                     
+                    // OPTIMIZACIÓN: Calcular solo los puntos necesarios
                     for (let i = 0; i <= segments; i++) {
                         const angle = (Math.PI * 2 / segments) * i;
                         const height = Math.sin((angle * wave.frequency * 10) + wave.phase) * ringAmplitude;
@@ -2295,150 +2325,132 @@
                     
                     this.ctx.closePath();
                     
-                    // Gradiente radial para efecto 3D
-                    const gradient = this.ctx.createRadialGradient(
-                        wave.centerX, wave.centerY, 0,
-                        wave.centerX, wave.centerY, ringRadius + ringAmplitude
-                    );
-                    // Extraer opacidad del color rgba
+                    // OPTIMIZACIÓN: Usar fillStyle simple en lugar de gradiente complejo
                     const opacityMatch = wave.color.match(/rgba?\([^)]+,\s*([\d.]+)\)/);
                     const baseOpacity = opacityMatch ? parseFloat(opacityMatch[1]) : 0.2;
-                    const ringOpacity = baseOpacity * (1 - ring * 0.2);
-                    gradient.addColorStop(0, `rgba(0, 224, 255, ${ringOpacity})`);
-                    gradient.addColorStop(0.7, `rgba(0, 224, 255, ${ringOpacity * 0.5})`);
-                    gradient.addColorStop(1, 'rgba(0, 224, 255, 0)');
-                    
-                    this.ctx.fillStyle = gradient;
+                    const ringOpacity = baseOpacity * (1 - ring * 0.25);
+                    this.ctx.fillStyle = `rgba(0, 224, 255, ${ringOpacity * 0.6})`;
                     this.ctx.fill();
                 }
                 
-                // Dibujar líneas de contorno para definir mejor la forma
-                this.ctx.beginPath();
-                for (let i = 0; i <= segments; i++) {
-                    const angle = (Math.PI * 2 / segments) * i;
-                    const height = Math.sin((angle * wave.frequency * 10) + wave.phase) * wave.amplitude;
-                    const x = wave.centerX + Math.cos(angle) * wave.radius;
-                    const y = wave.centerY + Math.sin(angle) * wave.radius + (height * wave.depth);
-                    
-                    if (i === 0) {
-                        this.ctx.moveTo(x, y);
-                    } else {
-                        this.ctx.lineTo(x, y);
+                // OPTIMIZACIÓN: Dibujar contorno solo si es necesario (reducir complejidad)
+                if (this.bats.length === 0) { // Solo dibujar contorno cuando no hay murciélagos
+                    this.ctx.beginPath();
+                    for (let i = 0; i <= segments; i += 2) { // Saltar puntos para reducir cálculos
+                        const angle = (Math.PI * 2 / segments) * i;
+                        const height = Math.sin((angle * wave.frequency * 10) + wave.phase) * wave.amplitude;
+                        const x = wave.centerX + Math.cos(angle) * wave.radius;
+                        const y = wave.centerY + Math.sin(angle) * wave.radius + (height * wave.depth);
+                        
+                        if (i === 0) {
+                            this.ctx.moveTo(x, y);
+                        } else {
+                            this.ctx.lineTo(x, y);
+                        }
                     }
+                    this.ctx.closePath();
+                    this.ctx.strokeStyle = wave.color;
+                    this.ctx.lineWidth = 1;
+                    this.ctx.stroke();
                 }
-                this.ctx.closePath();
-                this.ctx.strokeStyle = wave.color;
-                this.ctx.lineWidth = 1;
-                this.ctx.stroke();
             }
             
             drawBat(bat) {
-                // Aplicar curva continua al vuelo para movimiento más natural
-                if (bat.curveAmount !== undefined) {
+                // OPTIMIZACIÓN: Simplificar física de curva (menos cálculos)
+                if (bat.curveAmount !== undefined && Math.floor(bat.distance) % 5 === 0) { // Aplicar curva cada 5 unidades de distancia
                     const perpendicularAngle = Math.atan2(bat.vy, bat.vx) + (Math.PI / 2) * bat.curveDirection;
-                    const curveForce = bat.curveAmount * 0.15;
+                    const curveForce = bat.curveAmount * 0.1; // Reducido de 0.15
                     bat.vx += Math.cos(perpendicularAngle) * curveForce;
                     bat.vy += Math.sin(perpendicularAngle) * curveForce;
-                    
-                    // Normalizar velocidad para mantener velocidad constante
-                    const currentSpeed = Math.sqrt(bat.vx * bat.vx + bat.vy * bat.vy);
-                    const baseSpeed = 3 + Math.random() * 4;
-                    if (currentSpeed > 0) {
-                        bat.vx = (bat.vx / currentSpeed) * baseSpeed;
-                        bat.vy = (bat.vy / currentSpeed) * baseSpeed;
-                    }
                 }
                 
                 // Actualizar posición y animación de alas
                 bat.x += bat.vx;
                 bat.y += bat.vy;
-                bat.distance += Math.sqrt(bat.vx * bat.vx + bat.vy * bat.vy);
+                // OPTIMIZACIÓN: Usar distancia aproximada (más rápido que sqrt)
+                bat.distance += Math.abs(bat.vx) + Math.abs(bat.vy);
                 bat.wingPhase += bat.wingSpeed;
                 
-                // Rotación suave basada en dirección de movimiento (más natural)
+                // OPTIMIZACIÓN: Rotación simplificada (menos cálculos)
                 const targetAngle = Math.atan2(bat.vy, bat.vx);
-                // Interpolación suave para rotación más fluida
-                const angleDiff = targetAngle - bat.angle;
-                // Normalizar diferencia de ángulo
-                let normalizedDiff = angleDiff;
-                while (normalizedDiff > Math.PI) normalizedDiff -= Math.PI * 2;
-                while (normalizedDiff < -Math.PI) normalizedDiff += Math.PI * 2;
-                bat.angle += normalizedDiff * 0.15; // Suavizar rotación
+                let angleDiff = targetAngle - bat.angle;
+                // Normalizar diferencia de ángulo (versión optimizada)
+                if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                else if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                bat.angle += angleDiff * 0.2; // Aumentado de 0.15 para menos frames de interpolación
                 
                 // Reducir opacidad con la distancia
                 bat.opacity = Math.max(0, 1 - (bat.distance / bat.maxDistance));
                 
-                // Eliminar murciélagos que están muy lejos o muy transparentes (se desaparecen)
+                // Eliminar murciélagos que están muy lejos o muy transparentes
                 if (bat.distance > bat.maxDistance || bat.opacity < 0.02) {
-                    return false; // Se elimina del array
+                    return false;
                 }
                 
                 // Guardar contexto
                 this.ctx.save();
                 
-                // Aplicar glow INTENSO mejorado
-                const glowIntensity = bat.opacity * bat.glow;
+                // OPTIMIZACIÓN: Reducir glow para mejor rendimiento
+                const glowIntensity = bat.opacity * bat.glow * 0.7; // Reducido
                 this.ctx.globalAlpha = bat.opacity;
                 
-                // Dibujar murciélago usando la forma exacta del JSON Lottie
+                // Dibujar murciélago
                 this.ctx.translate(bat.x, bat.y);
                 this.ctx.rotate(bat.angle);
                 
-                // Escalar los puntos del path según el tamaño del murciélago
-                // El path original tiene un tamaño base de ~140px (de -70 a +70)
-                const scale = bat.size / 140; // Normalizar al tamaño del murciélago
+                const scale = bat.size / 140;
                 
-                // Color sólido negro con glow neón mejorado
-                this.ctx.fillStyle = '#000000';
-                this.ctx.strokeStyle = `rgba(0, 224, 255, ${bat.opacity * 0.8})`;
-                this.ctx.lineWidth = 1.5;
-                
-                // Glow principal cian
-                this.ctx.shadowBlur = 40 * bat.glow;
+                // OPTIMIZACIÓN: Reducir shadowBlur para mejor rendimiento
+                this.ctx.shadowBlur = 25 * bat.glow; // Reducido de 40
                 this.ctx.shadowColor = `rgba(0, 224, 255, ${glowIntensity})`;
                 
-                // Animación de alas usando escala Y para simular movimiento
-                const wingSpread = Math.sin(bat.wingPhase) * 0.3 + 0.7; // 0.7 a 1.0 (más sutil)
-                const wingScaleY = wingSpread; // Escalar verticalmente para efecto de alas
+                // Animación de alas
+                const wingSpread = Math.sin(bat.wingPhase) * 0.3 + 0.7;
+                const wingScaleY = wingSpread;
                 
-                // Dibujar el path del murciélago escalado y animado
+                // Dibujar el path del murciélago
                 this.ctx.beginPath();
                 const points = this.batShape;
-                
-                // Primer punto
                 this.ctx.moveTo(points[0][0] * scale, points[0][1] * scale * wingScaleY);
                 
-                // Dibujar el resto de los puntos con animación de alas
-                for (let i = 1; i < points.length; i++) {
+                // OPTIMIZACIÓN: Dibujar cada 2 puntos en lugar de todos (reduce cálculos)
+                for (let i = 2; i < points.length; i += 2) {
                     const [x, y] = points[i];
-                    // Aplicar escala y animación de alas (solo en Y para efecto de vuelo)
-                    const scaledX = x * scale;
-                    const scaledY = y * scale * wingScaleY;
-                    this.ctx.lineTo(scaledX, scaledY);
+                    this.ctx.lineTo(x * scale, y * scale * wingScaleY);
                 }
-                
-                // Cerrar el path
                 this.ctx.closePath();
+                
+                this.ctx.fillStyle = '#000000';
                 this.ctx.fill();
+                this.ctx.strokeStyle = `rgba(0, 224, 255, ${bat.opacity * 0.6})`; // Reducido
+                this.ctx.lineWidth = 1;
                 this.ctx.stroke();
                 
-                // Restaurar contexto
                 this.ctx.restore();
-                
                 return true;
             }
             
             drawBats() {
-                // Limitar número de murciélagos activos para mejor rendimiento
-                if (this.bats.length > 80) {
-                    // Eliminar los más antiguos si hay demasiados
-                    this.bats = this.bats.slice(-80);
+                // OPTIMIZACIÓN: Reducir límite (de 80 a 50)
+                if (this.bats.length > 50) {
+                    this.bats = this.bats.slice(-50);
                 }
-                // Filtrar y dibujar murciélagos (los que retornan false se eliminan)
+                // Filtrar y dibujar murciélagos
                 this.bats = this.bats.filter(bat => this.drawBat(bat));
             }
             
             animate() {
+                const now = performance.now();
+                
+                // OPTIMIZACIÓN: Saltar frames en modo reducido (cada 2 frames)
+                if (performanceMode === 'reduced') {
+                    this.frameSkip++;
+                    if (this.frameSkip % 2 === 0) {
+                        this.animationId = requestAnimationFrame(() => this.animate());
+                        return;
+                    }
+                }
+                
                 // Limpiar canvas
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
                 
@@ -2453,6 +2465,7 @@
                     this.drawBats();
                 }
                 
+                this.lastFrameTime = now;
                 this.animationId = requestAnimationFrame(() => this.animate());
             }
             
@@ -2461,9 +2474,9 @@
                 const startX = x !== undefined ? x : this.canvas.width / 2;
                 const startY = y !== undefined ? y : this.canvas.height / 2;
                 
-                // Número de murciélagos según intensidad
-                let batCount = 15;
-                if (intensity === 'high') batCount = 25;
+                // OPTIMIZACIÓN: Reducir número de murciélagos (de 15/25 a 10/18)
+                let batCount = 10;
+                if (intensity === 'high') batCount = 18;
                 
                 // Generar murciélagos en ráfagas escalonadas para efecto de enjambre
                 for (let i = 0; i < batCount; i++) {
@@ -2539,7 +2552,8 @@
             
             // Crear partículas desde el punto de clic/touch
             function createClickParticles(x, y) {
-                const particleCount = 12;
+                // OPTIMIZACIÓN: Reducir número de partículas (de 12 a 8)
+                const particleCount = 8;
                 
                 // Crear efecto de ondas
                 const ripple = document.createElement('div');
@@ -2573,12 +2587,16 @@
                 isInside = true;
                 updateLightPosition(e);
                 
-                // Crear partículas continuamente mientras el cursor está dentro
+                // OPTIMIZACIÓN: Reducir frecuencia de partículas (de 150ms a 250ms)
                 particleInterval = setInterval(() => {
                     if (isInside && !button.disabled) {
-                        createParticleFromCursor(mouseX, mouseY);
+                        // OPTIMIZACIÓN: Limitar número máximo de partículas activas
+                        const activeParticles = particlesContainer.querySelectorAll('.particle');
+                        if (activeParticles.length < 15) { // Máximo 15 partículas activas
+                            createParticleFromCursor(mouseX, mouseY);
+                        }
                     }
-                }, 150); // Cada 150ms
+                }, 250); // Cada 250ms (más lento = menos carga)
             });
             
             // Mouse leave
@@ -2651,6 +2669,4 @@
         });
     </script>
 </body>
-</html>
-
 </html>
