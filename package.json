@@ -1,0 +1,21 @@
+{
+  "name": "photocall-backend",
+  "version": "1.0.0",
+  "description": "Backend para el servicio de Photocall con integración a Google Drive.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "googleapis": "^140.0.1",
+    "multer": "^1.4.5-lts.1",
+    "qrcode": "^1.5.3",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
