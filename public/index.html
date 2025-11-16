@@ -333,6 +333,9 @@
                     countdownDisplay.textContent = '';
                     countdownDisplay.style.display = 'none';
                     
+                    // Cambiar el mensaje cuando aparece el spinner
+                    countdownMessage.textContent = 'Espere, su foto estará lista en unos instantes…';
+                    
                     // Mostrar spinner de carga
                     if (loadingSpinner) {
                         loadingSpinner.classList.add('active');
