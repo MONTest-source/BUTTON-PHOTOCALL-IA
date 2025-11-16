@@ -47,14 +47,41 @@ Ver `RENDER-DEPLOY.md` para instrucciones detalladas.
 - `npm start` - Inicia el servidor de producción
 - `npm install` - Instala dependencias
 
+## ⚠️ IMPORTANTE: Antes de Subir a Git
+
+**NO subas `node_modules/` a Git**. Esta carpeta:
+- Es muy pesada (cientos de MB)
+- Se regenera automáticamente con `npm install`
+- Está en `.gitignore` para que Git la ignore
+
+### Verificar antes de hacer commit:
+
+```bash
+# Verificar que node_modules está ignorado
+git status
+
+# Si aparece node_modules, asegúrate de que está en .gitignore
+```
+
+### Archivos que SÍ deben subirse:
+- ✅ `package.json` - Define las dependencias
+- ✅ `package-lock.json` - Bloquea versiones exactas (buena práctica)
+- ✅ Todo el código fuente
+- ✅ Archivos de configuración
+
+### Archivos que NO deben subirse:
+- ❌ `node_modules/` - Se regenera con `npm install`
+- ❌ `.env` - Variables de entorno (sensibles)
+- ❌ Archivos de credenciales
+
 ## Listo para Desplegar
 
 Este proyecto está listo para ser desplegado en Render. Solo necesitas:
 
-1. Subir el código a un repositorio Git
+1. Subir el código a un repositorio Git (sin `node_modules/`)
 2. Conectar el repositorio a Render
-3. Configurar las variables de entorno
-4. Desplegar
+3. Configurar las variables de entorno en Render
+4. Render ejecutará `npm install` automáticamente
 
 ¡Listo! 🚀
 

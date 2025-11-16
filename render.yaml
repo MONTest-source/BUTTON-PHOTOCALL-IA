@@ -5,13 +5,12 @@ services:
     plan: free
     buildCommand: npm install
     startCommand: npm start
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      # Las siguientes variables deben configurarse en el dashboard de Render:
-      # - PUBLIC_BASE_URL: URL pública de tu servicio (ej: https://photocall-backend.onrender.com)
-      # - DRIVE_PARENT_FOLDER_ID: ID de la carpeta padre en Google Drive
-      # - GOOGLE_CREDENTIALS: JSON completo de las credenciales de Google (como string)
+    # NOTA: Las variables de entorno se configuran en el Dashboard de Render:
+    # - PUBLIC_BASE_URL: URL pública del servicio (ej: https://photocall-backend.onrender.com)
+    # - DRIVE_PARENT_FOLDER_ID: ID de la carpeta padre en Google Drive
+    # - GOOGLE_CREDENTIALS: JSON completo de credenciales de Google (como string)
+    # 
+    # Render configura automáticamente:
+    # - NODE_ENV: production
+    # - PORT: (puerto asignado automáticamente)
 
