@@ -10,7 +10,10 @@
     <meta name="googlebot" content="index, follow">
     <meta name="google" content="notranslate">
     <meta name="google" content="notranslate">
-    <title>Photocall – Captura y QR</title>
+    <title>Photocall IA – Captura y QR</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,9 +26,16 @@
     <div class="app-container">
         <!-- HEADER -->
         <header class="header" role="banner">
-            <div class="logo-placeholder" aria-hidden="true">P</div>
+            <div class="logo-mon" aria-hidden="true">
+                <div class="logo-mon-text">
+                    <span class="logo-letter">M</span>
+                    <span class="logo-letter-o"></span>
+                    <span class="logo-letter">N</span>
+                </div>
+                <div class="logo-mon-subtitle">MAPPING ON</div>
+            </div>
             <div class="header-content">
-                <h1>Photocall</h1>
+                <h1>Photocall IA</h1>
                 <p class="subtitle">Pulsa CAPTURAR, espera 10s y escanea el QR</p>
             </div>
         </header>
@@ -59,7 +69,7 @@
                                 10
                             </div>
                             <p class="btn-message" id="countdown-message" aria-live="polite">
-                                Manten la pose, no te muevas, pronto se capturará tu foto…
+                                Mantén la pose, no te muevas, pronto se capturará tu foto…
                             </p>
                             <div class="loading-spinner" id="loading-spinner" role="status" aria-label="Cargando imagen">
                                 <div class="spinner-ring"></div>
@@ -312,8 +322,8 @@
             countdownDisplay.textContent = timeLeft;
             countdownDisplay.setAttribute('aria-label', `Cuenta atrás: ${timeLeft} segundos`);
             
-            // Mostrar mensaje "Mantente listo..." desde el inicio
-            countdownMessage.textContent = 'Mantente listo, tu foto se está creando…';
+            // Mostrar mensaje durante la cuenta atrás (momento de la captura)
+            countdownMessage.textContent = 'Mantén la pose, no te muevas, pronto se capturará tu foto…';
 
             countdownInterval = setInterval(() => {
                 timeLeft--;
