@@ -109,90 +109,17 @@ body {
 
 .logo-mon {
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     min-width: 80px;
+    height: 48px;
 }
 
-.logo-mon-text {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    font-family: var(--font-heading);
-    font-weight: 700;
-    font-size: 32px;
-    line-height: 1;
-    letter-spacing: -1px;
-}
-
-.logo-letter {
-    color: #FFFFFF;
-    text-shadow: 
-        -2px -2px 0 #FF0000,
-        2px 2px 0 #00FFFF,
-        -1px -1px 0 #FF0000,
-        1px 1px 0 #00FFFF;
-    position: relative;
-    display: inline-block;
-}
-
-.logo-letter-o {
-    position: relative;
-    width: 32px;
-    height: 32px;
-    border: 4px solid #FFFFFF;
-    border-radius: 50%;
-    display: inline-block;
-    background: transparent;
-    box-shadow: 
-        -2px -2px 0 #FF0000,
-        2px 2px 0 #00FFFF,
-        -1px -1px 0 #FF0000,
-        1px 1px 0 #00FFFF;
-    vertical-align: middle;
-    margin: 0 2px;
-}
-
-.logo-letter-o::before {
-    content: '';
-    width: 12px;
-    height: 12px;
-    border: 2px solid #000000;
-    border-radius: 50%;
-    background: #FFFFFF;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    box-shadow: 
-        -1px -1px 0 #FF0000,
-        1px 1px 0 #00FFFF;
-}
-
-.logo-letter-o::after {
-    content: '';
-    width: 4px;
-    height: 4px;
-    background: #FFFFFF;
-    border-radius: 50%;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    box-shadow: 
-        -1px -1px 0 #FF0000,
-        1px 1px 0 #00FFFF;
-}
-
-.logo-mon-subtitle {
-    font-family: var(--font-body);
-    font-size: 8px;
-    font-weight: 400;
-    color: #FFFFFF;
-    letter-spacing: 1px;
-    margin-top: 4px;
-    text-transform: uppercase;
+.logo-mon-img {
+    height: 100%;
+    width: auto;
+    max-width: 200px;
+    object-fit: contain;
 }
 
 .header-content h1 {
@@ -1262,20 +1189,11 @@ body {
 
     .logo-mon {
         min-width: 60px;
+        height: 40px;
     }
     
-    .logo-mon-text {
-        font-size: 24px;
-    }
-    
-    .logo-letter-o {
-        width: 24px;
-        height: 24px;
-        border-width: 3px;
-    }
-    
-    .logo-mon-subtitle {
-        font-size: 7px;
+    .logo-mon-img {
+        max-width: 150px;
     }
 
     .header-content h1 {
@@ -1411,20 +1329,11 @@ body {
 
     .logo-mon {
         min-width: 50px;
+        height: 36px;
     }
     
-    .logo-mon-text {
-        font-size: 20px;
-    }
-    
-    .logo-letter-o {
-        width: 20px;
-        height: 20px;
-        border-width: 2px;
-    }
-    
-    .logo-mon-subtitle {
-        font-size: 6px;
+    .logo-mon-img {
+        max-width: 120px;
     }
 
     .header-content h1 {

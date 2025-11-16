@@ -14,12 +14,12 @@
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-
+    
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-
+    
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -27,12 +27,7 @@
         <!-- HEADER -->
         <header class="header" role="banner">
             <div class="logo-mon" aria-hidden="true">
-                <div class="logo-mon-text">
-                    <span class="logo-letter">M</span>
-                    <span class="logo-letter-o"></span>
-                    <span class="logo-letter">N</span>
-                </div>
-                <div class="logo-mon-subtitle">MAPPING ON</div>
+                <img src="logo-mon.svg" alt="MON Mapping ON" class="logo-mon-img">
             </div>
             <div class="header-content">
                 <h1>Photocall IA</h1>
@@ -877,23 +872,23 @@
                 
                 // OPTIMIZACIÓN: Dibujar contorno solo si es necesario (reducir complejidad)
                 if (this.bats.length === 0) { // Solo dibujar contorno cuando no hay murciélagos
-                    this.ctx.beginPath();
+                this.ctx.beginPath();
                     for (let i = 0; i <= segments; i += 2) { // Saltar puntos para reducir cálculos
-                        const angle = (Math.PI * 2 / segments) * i;
-                        const height = Math.sin((angle * wave.frequency * 10) + wave.phase) * wave.amplitude;
-                        const x = wave.centerX + Math.cos(angle) * wave.radius;
-                        const y = wave.centerY + Math.sin(angle) * wave.radius + (height * wave.depth);
-                        
-                        if (i === 0) {
-                            this.ctx.moveTo(x, y);
-                        } else {
-                            this.ctx.lineTo(x, y);
-                        }
+                    const angle = (Math.PI * 2 / segments) * i;
+                    const height = Math.sin((angle * wave.frequency * 10) + wave.phase) * wave.amplitude;
+                    const x = wave.centerX + Math.cos(angle) * wave.radius;
+                    const y = wave.centerY + Math.sin(angle) * wave.radius + (height * wave.depth);
+                    
+                    if (i === 0) {
+                        this.ctx.moveTo(x, y);
+                    } else {
+                        this.ctx.lineTo(x, y);
                     }
-                    this.ctx.closePath();
-                    this.ctx.strokeStyle = wave.color;
-                    this.ctx.lineWidth = 1;
-                    this.ctx.stroke();
+                }
+                this.ctx.closePath();
+                this.ctx.strokeStyle = wave.color;
+                this.ctx.lineWidth = 1;
+                this.ctx.stroke();
                 }
             }
             
@@ -925,8 +920,8 @@
                 
                 // Retornar si debe eliminarse
                 return bat.distance <= bat.maxDistance && bat.opacity >= 0.02;
-            }
-            
+                }
+                
             drawBat(bat) {
                 // OPTIMIZACIÓN CRÍTICA: Eliminar shadowBlur completamente (muy costoso)
                 // En su lugar, usar stroke más grueso y múltiples capas simples
@@ -1159,8 +1154,8 @@
                         // OPTIMIZACIÓN: Limitar número máximo de partículas activas
                         const activeParticles = particlesContainer.querySelectorAll('.particle');
                         if (activeParticles.length < 15) { // Máximo 15 partículas activas
-                            createParticleFromCursor(mouseX, mouseY);
-                        }
+                        createParticleFromCursor(mouseX, mouseY);
+                    }
                     }
                 }, 250); // Cada 250ms (más lento = menos carga)
             });
