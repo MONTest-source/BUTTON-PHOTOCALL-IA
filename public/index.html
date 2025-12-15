@@ -128,15 +128,13 @@
     <div class="reset-message" id="reset-message">REINICIANDO...</div>
 
     <!-- QRCode Library -->
-    <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js" 
-            crossorigin="anonymous"
-            onerror="window.QRCodeLoadFailed = true;"></script>
-
+    
     <script>
         // ============================================
         // CONSTANTS & STATE
         // ============================================
         let countdownInterval = null;
+        let currentJobId = null;
         let resetTimeout = null;
         const COUNTDOWN_DURATION = 10; // 10 segundos
         const RESET_UI_TIMEOUT = 30000; // 30 segundos (30 minutos = 1800000)
@@ -356,190 +354,53 @@
         // ============================================
         // GENERATE AND SHOW QR
         // ============================================
-        function showQR() {
-            // Verificar que QRCode esté disponible
-            if (typeof QRCode === 'undefined' || window.QRCodeLoadFailed) {
-                // Silenciosamente usar placeholder si QRCode no está disponible
-                const placeholderQR = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgwIiBoZWlnaHQ9IjI4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjgwIiBoZWlnaHQ9IjI4MCIgZmlsbD0iI2ZmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiMwMDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5RUiBQcm90b3R5cG88L3RleHQ+PC9zdmc+';
-                qrCodeImg.src = placeholderQR;
-                showState(stateReady);
-                showToast('Tu foto está lista', 'success');
-                
-                // Añadir animación especial también para placeholder
-                const qrContainer = document.querySelector('.btn-qr-container');
-                if (qrContainer) {
-                    qrContainer.classList.add('qr-appearing');
-                    for (let i = 0; i < 3; i++) {
-                        setTimeout(() => {
-                            const ripple = document.createElement('div');
-                            ripple.className = 'qr-ripple';
-                            ripple.style.animationDelay = `${i * 0.2}s`;
-                            qrContainer.appendChild(ripple);
-                            setTimeout(() => {
-                                if (ripple.parentNode) ripple.remove();
-                            }, 2000);
-                        }, i * 200);
-                    }
-                    setTimeout(() => {
-                        qrContainer.classList.remove('qr-appearing');
-                    }, 2000);
-                }
-                
-                // Murciélagos cuando aparece el QR placeholder
-                if (wavesAnimation) {
-                    const centerX = window.innerWidth / 2;
-                    const centerY = window.innerHeight / 2;
-                    wavesAnimation.triggerBats(centerX, centerY, 'high');
-                }
-                
-                resetTimeout = setTimeout(() => {
-                    console.log("Reseteando aplicación después de 30 segundos...");
-                    resetUI();
-                }, RESET_UI_TIMEOUT);
+        
+        function showQR(){
+            // Necesitamos currentJobId del /api/capture
+            if(!currentJobId){
+                // fallback visual si algo falló
+                showState(stateError);
+                showError('No se pudo iniciar la captura. Reintenta.');
+                captureBtn.disabled = false;
                 return;
             }
-            
-            // Generar un ID único para esta sesión
-            const sessionId = Date.now().toString(36) + Math.random().toString(36).substr(2);
-            const redirectUrl = `${window.location.origin}/d/${sessionId}`;
-            
-            // Generar QR falso usando la librería QRCode
-            try {
-                    QRCode.toDataURL(redirectUrl, {
-                        width: 160,
-                        margin: 1,
-                        color: {
-                            dark: '#000000',
-                            light: '#FFFFFF'
-                        },
-                        errorCorrectionLevel: 'H'
-                    }, (err, qrDataUrl) => {
-                    if (err) {
-                        // Silenciosamente usar placeholder si falla la generación
-                        // Usar placeholder si falla
-                        const placeholderQR = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgwIiBoZWlnaHQ9IjI4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjgwIiBoZWlnaHQ9IjI4MCIgZmlsbD0iI2ZmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiMwMDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5RUiBQcm90b3R5cG88L3RleHQ+PC9zdmc+';
-                        qrCodeImg.src = placeholderQR;
+            // Polling al backend hasta que el QR esté listo
+            const startTs = Date.now();
+            const poll = () => {
+                fetch(`/api/status/${currentJobId}`)
+                  .then(r=>r.json())
+                  .then(s=>{
+                    if(s.status==='ready' && s.qrPngDataUrl){
+                        qrCodeImg.src = s.qrPngDataUrl;
                         showState(stateReady);
                         showToast('Tu foto está lista', 'success');
-                        
-                        // Añadir animación especial también para error
+                        // animación existente
                         const qrContainer = document.querySelector('.btn-qr-container');
                         if (qrContainer) {
                             qrContainer.classList.add('qr-appearing');
-                            for (let i = 0; i < 3; i++) {
-                                setTimeout(() => {
-                                    const ripple = document.createElement('div');
-                                    ripple.className = 'qr-ripple';
-                                    ripple.style.animationDelay = `${i * 0.2}s`;
-                                    qrContainer.appendChild(ripple);
-                                    setTimeout(() => {
-                                        if (ripple.parentNode) ripple.remove();
-                                    }, 2000);
-                                }, i * 200);
-                            }
-                            setTimeout(() => {
-                                qrContainer.classList.remove('qr-appearing');
-                            }, 2000);
+                            setTimeout(() => qrContainer.classList.remove('qr-appearing'), 2000);
                         }
-                        
-                        // Murciélagos cuando aparece el QR de error
-                        if (wavesAnimation) {
-                            const centerX = window.innerWidth / 2;
-                            const centerY = window.innerHeight / 2;
-                            wavesAnimation.triggerBats(centerX, centerY, 'high');
+                        resetTimeout = setTimeout(()=>resetUI(), RESET_UI_TIMEOUT);
+                    } else if(s.status==='failed'){
+                        showState(stateError);
+                        showError(s.error || 'Fallo procesando tu foto.');
+                        captureBtn.disabled = false;
+                    } else {
+                        // sigue pendiente
+                        if (Date.now() - startTs < 120000) { // 2 min guardrail
+                            setTimeout(poll, 1000);
+                        } else {
+                            showState(stateError);
+                            showError('Tiempo de espera agotado. Intenta de nuevo.');
+                            captureBtn.disabled = false;
                         }
-                        
-                        resetTimeout = setTimeout(() => {
-                            resetUI();
-                        }, RESET_UI_TIMEOUT);
-                        return;
                     }
-                    
-                    // Mostrar el QR dentro del botón
-                    qrCodeImg.onload = () => {
-                        showState(stateReady);
-                        showToast('Tu foto está lista', 'success');
-                        
-                        // Obtener el contenedor del QR
-                        const qrContainer = document.querySelector('.btn-qr-container');
-                        
-                        // Añadir animación especial cuando aparece el QR
-                        if (qrContainer) {
-                            // Añadir clase de animación
-                            qrContainer.classList.add('qr-appearing');
-                            
-                            // Crear ondas concéntricas múltiples
-                            for (let i = 0; i < 3; i++) {
-                                setTimeout(() => {
-                                    const ripple = document.createElement('div');
-                                    ripple.className = 'qr-ripple';
-                                    ripple.style.animationDelay = `${i * 0.2}s`;
-                                    qrContainer.appendChild(ripple);
-                                    
-                                    // Remover después de la animación
-                                    setTimeout(() => {
-                                        if (ripple.parentNode) {
-                                            ripple.remove();
-                                        }
-                                    }, 2000);
-                                }, i * 200);
-                            }
-                            
-                            // Remover clase de animación después de completarse
-                            setTimeout(() => {
-                                qrContainer.classList.remove('qr-appearing');
-                            }, 2000);
-                        }
-                        
-                        // Murciélagos cuando aparece el QR
-                        if (wavesAnimation) {
-                            const centerX = window.innerWidth / 2;
-                            const centerY = window.innerHeight / 2;
-                            wavesAnimation.triggerBats(centerX, centerY, 'high');
-                        }
-                        
-                        // Anunciar para lectores de pantalla
-                        const announcement = document.createElement('div');
-                        announcement.className = 'sr-only';
-                        announcement.setAttribute('role', 'status');
-                        announcement.setAttribute('aria-live', 'assertive');
-                        announcement.textContent = 'Tu foto está lista. Escanea el código QR para descargarla.';
-                        document.body.appendChild(announcement);
-                        setTimeout(() => announcement.remove(), 1000);
-                    };
-                    
-                    qrCodeImg.onerror = () => {
-                        // Silenciosamente usar placeholder si falla la carga
-                        const placeholderQR = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgwIiBoZWlnaHQ9IjI4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjgwIiBoZWlnaHQ9IjI4MCIgZmlsbD0iI2ZmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiMwMDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5RUiBQcm90b3R5cG88L3RleHQ+PC9zdmc+';
-                        qrCodeImg.src = placeholderQR;
-                        showState(stateReady);
-                    };
-                    
-                    qrCodeImg.src = qrDataUrl;
-                    
-                    // Programar reseteo después de 30 segundos
-                    resetTimeout = setTimeout(() => {
-                        resetUI();
-                    }, RESET_UI_TIMEOUT);
-                });
-            } catch (error) {
-                // Silenciosamente usar placeholder si hay error
-                const placeholderQR = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgwIiBoZWlnaHQ9IjI4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjgwIiBoZWlnaHQ9IjI4MCIgZmlsbD0iI2ZmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMjQiIGZpbGw9IiMwMDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5RUiBQcm90b3R5cG88L3RleHQ+PC9zdmc+';
-                qrCodeImg.src = placeholderQR;
-                showState(stateReady);
-                showToast('Tu foto está lista', 'success');
-                
-                // Añadir animación especial
-                const qrContainer = document.querySelector('.btn-qr-container');
-                if (qrContainer) {
-                    qrContainer.classList.add('qr-appearing');
-                    setTimeout(() => qrContainer.classList.remove('qr-appearing'), 2000);
-                }
-                
-                resetTimeout = setTimeout(() => {
-                    resetUI();
-                }, RESET_UI_TIMEOUT);
-            }
+                  })
+                  .catch(()=>{
+                      setTimeout(poll,1000);
+                  });
+            };
+            poll();
         }
 
         // ============================================
@@ -646,22 +507,13 @@
             // También hacer POST /api/capture para crear el jobId
             // (El backend también enviará el mensaje WebSocket, pero es redundante si ya lo enviamos aquí)
             // Por ahora mantenemos el POST para mantener compatibilidad
-            fetch('/api/capture', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Job creado exitosamente
-            })
-            .catch(error => {
-                // Silenciosamente manejar errores de red (normal en modo prototipo)
+            fetch('/api/capture', {method:'POST',headers:{'Content-Type':'application/json'}})
+            .then(r=>r.json())
+            .then(data=>{ currentJobId = data.jobId; })
+            .catch(()=>{})
+            .finally(()=>{
+                startCountdown(COUNTDOWN_DURATION);
             });
-            
-            // Iniciar cuenta atrás de 10 segundos directamente
-            startCountdown(COUNTDOWN_DURATION);
         }
 
         // ============================================
