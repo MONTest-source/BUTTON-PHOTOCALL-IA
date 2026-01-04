@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,62 +12,121 @@
     <meta name="google" content="notranslate">
     <title>Photocall IA – Captura y QR</title>
 
+    <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="pia-favicon.ico">
+    <link rel="shortcut icon" href="pia-favicon.ico">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
     <div class="app-container">
-        <header class="header">
-            <div class="logo-mon"><img src="logo.png" alt="MON Mapping ON"></div>
+        <!-- HEADER -->
+        <header class="header" role="banner">
+            <div class="logo-mon" aria-hidden="true">
+                <img src="logo.png" alt="MON Mapping ON" class="logo-mon-img">
+            </div>
             <div class="header-content">
                 <h1>Photocall IA</h1>
+                <p class="subtitle">Pulsa CAPTURAR, espera 5s y escanea el QR</p>
             </div>
         </header>
 
-        <main class="main-content">
+        <!-- MAIN CONTENT -->
+        <main class="main-content" role="main">
             <div class="content-card">
-                <!-- Estado de Captura -->
-                <div class="state-idle" id="state-idle">
-                    <button class="btn-primary" id="capture-btn">CAPTURAR</button>
+                <!-- STATE: IDLE -->
+                <div class="state-idle" id="state-idle" role="region" aria-label="Estado inicial">
+                    <button class="btn-primary" id="capture-btn" aria-label="Iniciar captura de foto">
+                        <div class="particles" id="particles-container"></div>
+                        <div class="btn-content">
+                            <div class="btn-text">CAPTURAR</div>
+                            <div class="btn-icon" aria-hidden="true">📸</div>
+                        </div>
+                    </button>
+                    <p class="note-text note-text-spaced" aria-live="polite">
+                        La descarga se hará mediante un código QR.
+                    </p>
                 </div>
 
-                <!-- Estado Countdown -->
-                <div class="state-countdown hidden" id="state-countdown">
-                    <button class="btn-primary" disabled>Cuenta atrás</button>
-                </div>
-
-                <!-- Estado Listo para QR -->
-                <div class="state-ready hidden" id="state-ready">
-                    <button class="btn-primary" disabled>
-                        <div id="qr-code-img"></div>
+                <!-- STATE: COUNTDOWN (dentro del botón) -->
+                <div class="state-countdown hidden" id="state-countdown" role="region" aria-label="Cuenta atrás">
+                    <button class="btn-primary" disabled aria-label="Captura en progreso">
+                        <div class="btn-content">
+                            <div class="btn-countdown" id="countdown-display" 
+                                 role="timer" 
+                                 aria-live="assertive" 
+                                 aria-atomic="true"
+                                 aria-label="Cuenta atrás en segundos">
+                                5
+                            </div>
+                            <p class="btn-message" id="countdown-message" aria-live="polite">
+                                Mantén la pose, no te muevas, pronto se capturará tu foto…
+                            </p>
+                            <div class="loading-spinner" id="loading-spinner" role="status" aria-label="Cargando imagen">
+                                <div class="spinner-ring"></div>
+                                <div class="spinner-ring"></div>
+                                <div class="spinner-ring"></div>
+                            </div>
+                        </div>
                     </button>
                 </div>
 
-                <!-- Estado de Error -->
-                <div class="state-error hidden" id="state-error">
-                    <p>Ha ocurrido un error inesperado.</p>
-                    <button class="btn-primary" id="retry-btn">Reintentar</button>
+                <!-- STATE: READY (dentro del botón) -->
+                <div class="state-ready hidden" id="state-ready" role="region" aria-label="Foto lista">
+                    <button class="btn-primary" disabled aria-label="QR listo">
+                        <div class="btn-content">
+                            <div class="btn-qr-title">¡Tu foto está lista!</div>
+                            <div class="btn-qr-container">
+                                <img id="qr-code-img" 
+                                     alt="Código QR para descargar tu foto. Escanea con tu móvil para acceder a la descarga."
+                                     role="img"
+                                     aria-label="Código QR de descarga">
+                            </div>
+                            <p class="btn-message">
+                                Escanea el QR para descargar tu foto.
+                            </p>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- STATE: ERROR -->
+                <div class="state-error hidden" id="state-error" role="alert">
+                    <div class="error-icon" aria-hidden="true">⚠️</div>
+                    <p class="error-message">
+                        Ha ocurrido un error inesperado.
+                    </p>
+                    <button class="btn-primary" id="retry-btn" aria-label="Reintentar captura">
+                        Reintentar
+                    </button>
                 </div>
             </div>
         </main>
+
+        <!-- FOOTER -->
+        <footer class="footer" role="contentinfo">
+            <p class="footer-text">
+                Tus datos no se almacenan más allá del evento. Solicita borrado si lo necesitas.
+            </p>
+        </footer>
     </div>
 
-    <script>
-        // Conexión WebSocket
-        let wsConnection = new WebSocket("ws://localhost:3000");
+    <!-- TOAST CONTAINER -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-        wsConnection.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === 'progress') {
-                // Mostrar progreso (no cambiar el QR aquí)
-            } else if (data.type === 'ready') {
-                // Mostrar el QR apuntando a la URL de Google Drive
-                document.getElementById("qr-code-img").src = "https://drive.google.com/drive/folders/129rHzcKt_iJdfKLS9eim05wiYw_pfpMO";
-                showState('state-ready');
-            }
-        };
-    </script>
+    <!-- Canvas para animación de olas -->
+    <canvas id="waves-canvas"></canvas>
+
+    <!-- Elementos para animación de reinicio -->
+    <div class="reset-overlay" id="reset-overlay"></div>
+    <div class="reset-circle" id="reset-circle"></div>
+    <div class="reset-sweep" id="reset-sweep"></div>
+    <div class="reset-message" id="reset-message">REINICIANDO...</div>
+
+    <script src="app.js"></script>
 </body>
-
 </html>
