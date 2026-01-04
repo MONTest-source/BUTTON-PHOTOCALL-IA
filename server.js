@@ -158,6 +158,15 @@ wss.on('connection', (ws, req) => {
         }
 
         jobs.set(jobId, next);
+
+        // Aviso por WebSocket a los clientes conectados (si aplica)
+        broadcastToTouchDesigner({
+          type: 'progress',
+          jobId,
+          progress: pct,
+          status: next.status,
+          downloadUrl: next.downloadUrl,
+        });
         return;
       }
 
@@ -239,10 +248,14 @@ app.post('/api/upload/:jobId', upload.single('file'), async (req, res) => {
 
     await makeAnyoneReader(drive, file.id);
 
+    const prev = jobs.get(jobId) || {};
     jobs.set(jobId, {
+      ...prev,
       status: 'ready',
+      progress: 1,
       downloadUrl: file.webViewLink || file.webContentLink,
-      createdAt: jobs.get(jobId).createdAt,
+      driveFileId: file.id,
+      createdAt: prev.createdAt,
     });
 
     console.log(`[${jobId}] Subida OK. URL: ${file.webViewLink || file.webContentLink}`);

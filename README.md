@@ -126,13 +126,84 @@ Para desplegar el servidor en Render, consulta la guía completa en [`RENDER-DEP
 
 ## Flujo de Evento (Resumen)
 
-1.  **Tablet**: El usuario pulsa "CAPTURAR". Se llama a `POST /api/capture` y se obtiene un `jobId`. Comienza una cuenta atrás de 10 segundos.
-2.  **Generador de Imagen**: Durante la cuenta atrás, genera la imagen JPG final.
+1.  **Tablet**: El usuario pulsa "CAPTURAR". Se llama a `POST /api/capture` y se obtiene un `jobId`. Comienza una cuenta atrás (configurada a 5 s).
+2.  **Generador de Imagen (TouchDesigner/ComfyTD)**: Durante/tras la cuenta atrás, genera la imagen final.
 3.  **Generador de Imagen**: Al terminar, sube la imagen con `POST /api/upload/:jobId`.
-4.  **Tablet**: Al finalizar la cuenta atrás, aparece un spinner de carga y empieza a consultar `GET /api/status/:jobId` cada segundo.
-5.  **Tablet**: Cuando el estado es `ready`, muestra el código QR con una animación especial (pulso, zoom, glow).
-6.  **Móvil del Usuario**: Escanea el QR, que apunta a `GET /d/:jobId`. El servidor le redirige a Google Drive para ver/descargar la foto.
-7.  **Reseteo**: Después de 30 segundos, la aplicación se reinicia automáticamente con una animación visual impactante.
+4.  **(Opcional) Progreso**: TouchDesigner puede enviar `{"type":"progress","jobId","progress":0..1}` por WebSocket; el backend refleja `status=processing` y `progress`.
+5.  **Tablet**: Tras la cuenta atrás, aparece spinner y empieza a consultar `GET /api/status/:jobId` cada segundo.
+6.  **Tablet**: Cuando el estado es `ready`, recibe `qrPngDataUrl` y lo muestra con animación; el QR apunta a `/d/:jobId` (redirect a Drive).
+7.  **Móvil del Usuario**: Escanea el QR y descarga la foto desde Drive.
+8.  **Reseteo**: Después de 30 s, la app se reinicia con la animación de reset.
+
+### Flujo TouchDesigner + ComfyTD (sin Button COMP)
+
+**Objetivo**: Recibir `capture`, disparar `Generate/Regenerate`, detectar fin con `uiprogress` y guardar 1 frame con `moviefileout1.par.record` (sin `button1.click()`).
+
+- **Nodos mínimos**:
+  - Trigger: `websocket2` + `websocket2_callbacks` recibe `{type:"capture", jobId:"..."}`
+  - Progreso: `par1` (lee `uiprogress` de `ComfyTD`) → `select1` → `logic1` (threshold ~0.99) → `chopexec_progress` (envía progreso por WS)
+  - Fin/guardado: `chopexec1` (onOffToOn de `logic1`) arma ruta, pone `moviefileout1.par.record = 1`, y suelta tras 1–2 frames
+  - TOP final: `null2` → `moviefileout1`
+
+- **Callback WS (websocket2_callbacks)**:
+```python
+def onReceiveText(dat, rowIndex, message):
+    import json
+    try:
+        data = json.loads(message)
+        if data.get('type') != 'capture':
+            return
+        jobId = data.get('jobId')
+        if not jobId:
+            print('[TD] WS sin jobId, ignorando')
+            return
+        root = op('/project1')
+        root.store('pending_job', jobId)
+        root.store('armed', True)
+        root.store('saved', False)
+        # reset de throttle de progreso
+        root.store('last_prog_t', 0.0)
+        root.store('last_prog_p', -1.0)
+        comfy = op('ComfyTD')
+        if comfy is not None:
+            if hasattr(comfy.par, 'Generate'):
+                comfy.par.Generate.pulse()
+            elif hasattr(comfy.par, 'Regenerate'):
+                comfy.par.Regenerate.pulse()
+        print(f'[TD] Job {jobId} → Generando...')
+    except Exception as e:
+        print('onReceiveText ERROR:', e)
+```
+
+- **Progreso (chopexec_progress)**:
+```python
+def onValueChange(channel, sampleIndex, val, prev):
+    import json, time
+    root = op('/project1')
+    if not root.fetch('armed', False):
+        return
+    jobId = root.fetch('pending_job', None)
+    if not jobId:
+        return
+    p = max(0.0, min(1.0, float(val)))
+    now = time.time()
+    last_t = root.fetch('last_prog_t', 0.0)
+    last_p = root.fetch('last_prog_p', -1.0)
+    if (now - last_t) < 0.10 and abs(p - last_p) < 0.02:
+        return
+    root.store('last_prog_t', now)
+    root.store('last_prog_p', p)
+    ws = op('websocket2')
+    if ws is None:
+        return
+    ws.sendText(json.dumps({
+        "type": "progress",
+        "jobId": jobId,
+        "progress": p
+    }))
+```
+
+> Nota: Ajusta el nombre del WebSocket DAT (`websocket2` en el ejemplo) si difiere en tu red.
 
 ## Animaciones y Efectos Visuales
 

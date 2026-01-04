@@ -471,10 +471,31 @@
                 wsConnection.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        
-                        // Solo loggear mensajes importantes
+                        const sameJob = !data.jobId || !currentJobId || data.jobId === currentJobId;
+
                         if (data.type === 'connected') {
                             console.log('[WebSocket] Conectado:', data.message);
+                            return;
+                        }
+
+                        // Progreso en tiempo real (opcional)
+                        if (data.type === 'progress' && sameJob) {
+                            const pct = typeof data.progress === 'number'
+                                ? Math.round(Math.max(0, Math.min(1, data.progress)) * 100)
+                                : null;
+                            if (pct !== null && countdownMessage) {
+                                countdownMessage.textContent = `Procesando... ${pct}%`;
+                            }
+                            return;
+                        }
+
+                        // Listo: recibir QR por WebSocket (si el backend lo envía)
+                        if (data.type === 'ready' && sameJob && data.qrPngDataUrl) {
+                            qrCodeImg.src = data.qrPngDataUrl;
+                            showState(stateReady);
+                            showToast('Tu foto está lista', 'success');
+                            resetTimeout = setTimeout(()=>resetUI(), RESET_UI_TIMEOUT);
+                            return;
                         }
                     } catch (error) {
                         // Silenciosamente manejar errores de parsing
