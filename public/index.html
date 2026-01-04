@@ -2,18 +2,25 @@
 <html lang="es">
 
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Captura y escanea el QR de forma fácil y rápida" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Captura y escanea el QR de forma fácil y rápida">
+    <meta name="keywords" content="Photocall, QR, Captura, Escaneo, Fácil, Rápido">
+    <meta name="MappingON" content="Photocall">
+    <meta name="robots" content="index, follow">
+    <meta name="googlebot" content="index, follow">
+    <meta name="google" content="notranslate">
+    <meta name="google" content="notranslate">
     <title>Photocall IA – Captura y QR</title>
-    <link rel="icon" type="image/x-icon" href="pia-favicon.ico" />
-    <link rel="stylesheet" href="styles.css" />
+
+    <link rel="icon" type="image/x-icon" href="pia-favicon.ico">
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
     <div class="app-container">
         <header class="header">
-            <div class="logo-mon"><img src="logo.png" alt="MON Mapping ON" /></div>
+            <div class="logo-mon"><img src="logo.png" alt="MON Mapping ON"></div>
             <div class="header-content">
                 <h1>Photocall IA</h1>
             </div>
@@ -21,7 +28,6 @@
 
         <main class="main-content">
             <div class="content-card">
-
                 <!-- Estado de Captura -->
                 <div class="state-idle" id="state-idle">
                     <button class="btn-primary" id="capture-btn">CAPTURAR</button>
@@ -29,14 +35,13 @@
 
                 <!-- Estado Countdown -->
                 <div class="state-countdown hidden" id="state-countdown">
-                    <button class="btn-primary" disabled id="progress-text">Procesando... 0%</button>
+                    <button class="btn-primary" disabled>Cuenta atrás</button>
                 </div>
 
                 <!-- Estado Listo para QR -->
                 <div class="state-ready hidden" id="state-ready">
                     <button class="btn-primary" disabled>
-                        <img id="qr-code-img" src="/qr.png" alt="Código QR para descargar la foto" loading="eager"
-                            decoding="async" />
+                        <div id="qr-code-img"></div>
                     </button>
                 </div>
 
@@ -45,46 +50,22 @@
                     <p>Ha ocurrido un error inesperado.</p>
                     <button class="btn-primary" id="retry-btn">Reintentar</button>
                 </div>
-
             </div>
         </main>
     </div>
 
     <script>
-        // Helper mínimo (si ya lo tienes en app.js, bórralo de aquí)
-        function showState(id) {
-            const ids = ["state-idle", "state-countdown", "state-ready", "state-error"];
-            ids.forEach(x => document.getElementById(x).classList.add("hidden"));
-            document.getElementById(id).classList.remove("hidden");
-        }
-
-        const progressText = document.getElementById("progress-text");
-
-        // WebSocket correcto para Render (https -> wss)
-        const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-        const wsConnection = new WebSocket(`${wsProto}//${location.host}`);
-
-        wsConnection.onopen = () => console.log("[WS] conectado");
-        wsConnection.onerror = (e) => console.log("[WS] error", e);
+        // Conexión WebSocket
+        let wsConnection = new WebSocket("ws://localhost:3000");
 
         wsConnection.onmessage = (event) => {
-            let data;
-            try { data = JSON.parse(event.data); } catch { return; }
-
-            if (data.type === "progress") {
-                const p = Math.max(0, Math.min(1, Number(data.progress ?? 0)));
-                const pct = Math.round(p * 100);
-                if (progressText) progressText.textContent = `Procesando... ${pct}%`;
-                showState("state-countdown");
-
-                // cuando termine (tu threshold real: 0.99)
-                if (p >= 0.99) showState("state-ready");
-                return;
-            }
-
-            if (data.type === "ready") {
-                showState("state-ready");
-                return;
+            const data = JSON.parse(event.data);
+            if (data.type === 'progress') {
+                // Mostrar progreso (no cambiar el QR aquí)
+            } else if (data.type === 'ready') {
+                // Mostrar el QR apuntando a la URL de Google Drive
+                document.getElementById("qr-code-img").src = "https://drive.google.com/drive/folders/129rHzcKt_iJdfKLS9eim05wiYw_pfpMO";
+                showState('state-ready');
             }
         };
     </script>
