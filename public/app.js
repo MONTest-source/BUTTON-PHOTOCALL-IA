@@ -411,12 +411,12 @@ function showError(message) {
 // WEBSOCKET CONNECTION
 // ============================================
 let wsReconnectAttempts = 0;
-const MAX_WS_RECONNECT_ATTEMPTS = 3;
+const MAX_WS_RECONNECT_ATTEMPTS = Infinity;
 let wsReconnectTimeout = null;
 
 function connectWebSocket() {
     // No intentar conectar si ya hay demasiados intentos fallidos
-    if (wsReconnectAttempts >= MAX_WS_RECONNECT_ATTEMPTS) {
+    if (Number.isFinite(MAX_WS_RECONNECT_ATTEMPTS) && wsReconnectAttempts >= MAX_WS_RECONNECT_ATTEMPTS) {
         return; // Silenciosamente dejar de intentar
     }
 
@@ -466,13 +466,13 @@ function connectWebSocket() {
         };
         
         wsConnection.onclose = () => {
-            // Solo intentar reconectar si no hemos excedido el límite
-            if (wsReconnectAttempts < MAX_WS_RECONNECT_ATTEMPTS) {
+            // Intentar reconectar siempre (o hasta el límite si es finito)
+            const shouldRetry = !Number.isFinite(MAX_WS_RECONNECT_ATTEMPTS) || wsReconnectAttempts < MAX_WS_RECONNECT_ATTEMPTS;
+            if (shouldRetry) {
                 wsReconnectTimeout = setTimeout(() => {
                     connectWebSocket();
                 }, 3000);
             }
-            // Si excedimos el límite, silenciosamente dejar de intentar
         };
     } catch (error) {
         // Silenciosamente manejar errores de creación de WebSocket
