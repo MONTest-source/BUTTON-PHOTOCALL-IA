@@ -4,7 +4,6 @@ import { v4 as uuidv4 } from 'uuid';
 import QRCode from 'qrcode';
 import { google } from 'googleapis';
 import { Readable } from 'stream';
-import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 
 // -----------------------------
@@ -16,7 +15,7 @@ const DRIVE_PARENT_FOLDER_ID = process.env.DRIVE_PARENT_FOLDER_ID; // Tu ID de c
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
-const FALLBACK_QR_URL = process.env.FALLBACK_QR_URL || 'https://drive.google.com/drive/folders/129rHzcKt_iJdfKLS9eim05wiYw_pfpMO';
+const FALLBACK_QR_URL = 'https://drive.google.com/drive/folders/129rHzcKt_iJdfKLS9eim05wiYw_pfpMO'; // Tu URL de Google Drive
 
 if (!PUBLIC_BASE_URL || !DRIVE_PARENT_FOLDER_ID || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REFRESH_TOKEN) {
   console.error('Faltan variables: PUBLIC_BASE_URL, DRIVE_PARENT_FOLDER_ID, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN.');
@@ -109,86 +108,6 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // -----------------------------
-// HTTP + WEBSOCKET (TouchDesigner)
-// -----------------------------
-const server = createServer(app);
-const wss = new WebSocketServer({ server });
-
-const touchDesignerClients = new Set();
-
-wss.on('connection', (ws, req) => {
-  const ip = req.socket.remoteAddress;
-  console.log(`[WS] Conexión desde ${ip}`);
-  touchDesignerClients.add(ws);
-
-  ws.send(JSON.stringify({ type: 'connected', message: 'Conectado al servidor Photocall' }));
-
-  ws.on('message', (msg) => {
-    try {
-      const data = JSON.parse(msg.toString());
-      if (data?.type === 'progress') {
-        const { jobId, progress } = data || {};
-        if (!jobId) return;
-
-        const job = jobs.get(jobId);
-        if (!job) return;
-
-        const pct = Math.max(0, Math.min(1, Number(progress) || 0));
-        const next = { ...job, progress: pct };
-
-        // Si llega a 100%, marca ready y usa URL fallback si no hay aún downloadUrl real.
-        if (pct >= 1) {
-          next.status = 'ready';
-          next.downloadUrl = next.downloadUrl || FALLBACK_QR_URL;
-        } else {
-          next.status = 'processing';
-        }
-
-        jobs.set(jobId, next);
-
-        // Avisar al frontend de los cambios
-        broadcastToTouchDesigner({
-          type: 'progress',
-          jobId,
-          progress: pct,
-          status: next.status,
-          downloadUrl: next.downloadUrl,
-        });
-      }
-
-      console.log('[WS] Mensaje:', data);
-      ws.send(JSON.stringify({ type: 'ack', received: data }));
-    } catch (e) {
-      console.error('[WS] Error en mensaje:', e);
-      ws.send(JSON.stringify({ type: 'error', message: 'Formato no válido' }));
-    }
-  });
-
-  ws.on('close', () => {
-    touchDesignerClients.delete(ws);
-    console.log(`[WS] Cliente cerrado (${ip})`);
-  });
-
-  ws.on('error', (e) => {
-    touchDesignerClients.delete(ws);
-    console.error('[WS] Error conexión:', e);
-  });
-});
-
-// Broadcast a todos los clientes conectados
-function broadcastToTouchDesigner(message) {
-  const payload = JSON.stringify(message);
-  let sent = 0;
-  for (const c of touchDesignerClients) {
-    if (c.readyState === 1) {
-      try { c.send(payload); sent++; } catch (e) { console.error('[WS] Error send:', e); }
-    }
-  }
-  console.log(`[WS] Enviado a ${sent} cliente(s) TD`);
-  return sent;
-}
-
-// -----------------------------
 // API
 // -----------------------------
 app.post('/api/capture', (req, res) => {
@@ -196,10 +115,7 @@ app.post('/api/capture', (req, res) => {
   jobs.set(jobId, { status: 'pending', createdAt: Date.now() });
   console.log(`[${jobId}] Job creado.`);
 
-  const msg = { type: 'capture', jobId, timestamp: Date.now(), countdownSec: 5 };
-  const notified = broadcastToTouchDesigner(msg);
-  if (notified === 0) console.warn(`[${jobId}] Sin clientes TouchDesigner conectados.`);
-
+  // Enviar el progreso como 0 (proceso iniciado)
   res.status(202).json({ jobId, countdownSec: 5 });
 });
 
@@ -240,7 +156,7 @@ app.post('/api/upload/:jobId', upload.single('file'), async (req, res) => {
       ...prev,
       status: 'ready',
       progress: 1,
-      downloadUrl: file.webViewLink || file.webContentLink,
+      downloadUrl: file.webViewLink || file.webContentLink, // Enlace de descarga
       driveFileId: file.id,
       createdAt: prev.createdAt,
     });
