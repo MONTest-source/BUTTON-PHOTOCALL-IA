@@ -128,6 +128,13 @@ wss.on("connection", (ws, req) => {
     }
 
     // ---- ACK opcional (debug) ----
+
+    // ---- Limpieza confirmada (opcional) ----
+    if (data.type === "cleaned") {
+      console.log(`[WS] TD confirmó cleanup job ${data.jobId || "?"}`);
+      return;
+    }
+
     if (data.type === "started" || data.type === "cancel") {
       ws.send(JSON.stringify({ type: "ack", received: data }));
       return;
@@ -156,6 +163,23 @@ app.post("/api/capture", (req, res) => {
 
   res.status(202).json({ jobId, countdownSec: 5, qrUrl: QR_URL_PATH, url: DRIVE_FOLDER_URL });
 });
+
+// Reset UI: pedir limpieza del último archivo (TouchDesigner) y opcionalmente olvidar el job
+app.post("/api/reset", (req, res) => {
+  try {
+    const { jobId } = req.body || {};
+    if (jobId) {
+      // Avisar a TouchDesigner para que borre el archivo local sincronizado con Drive
+      broadcast({ type: "cleanup", jobId });
+      // Opcional: borrar estado en memoria para evitar jobs huérfanos
+      jobs.delete(jobId);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
 
 // (Debug only) Estado del job
 app.get("/api/status/:jobId", (req, res) => {

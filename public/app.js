@@ -110,6 +110,17 @@ function showState(stateElement) {
 }
 
 function resetUI() {
+    // Pedir a backend que ordene a TouchDesigner borrar el último archivo (Drive sync).
+    const jobIdToClean = currentJobId;
+    if (jobIdToClean) {
+        fetch('/api/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId: jobIdToClean })
+        }).catch(() => { /* best-effort */ });
+    }
+    currentJobId = null;
+
     // Activar animación de reinicio antes de resetear
     playResetAnimation();
     
@@ -1011,4 +1022,3 @@ document.addEventListener('visibilitychange', () => {
         // Mantener intervalos activos para que el proceso continúe
     }
 });
-
