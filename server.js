@@ -176,11 +176,11 @@ app.post('/api/capture', (req, res) => {
   jobs.set(jobId, { status: 'pending', createdAt: Date.now() });
   console.log(`[${jobId}] Job creado.`);
 
-  const msg = { type: 'capture', jobId, timestamp: Date.now(), countdownSec: 10 };
+  const msg = { type: 'capture', jobId, timestamp: Date.now(), countdownSec: 5 };
   const notified = broadcastToTouchDesigner(msg);
   if (notified === 0) console.warn(`[${jobId}] Sin clientes TouchDesigner conectados.`);
 
-  res.status(202).json({ jobId, countdownSec: 10 });
+  res.status(202).json({ jobId, countdownSec: 5 });
 });
 
 app.post('/api/upload/:jobId', upload.single('file'), async (req, res) => {

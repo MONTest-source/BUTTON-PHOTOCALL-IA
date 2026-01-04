@@ -32,7 +32,7 @@
             </div>
             <div class="header-content">
                 <h1>Photocall IA</h1>
-                <p class="subtitle">Pulsa CAPTURAR, espera 10s y escanea el QR</p>
+                <p class="subtitle">Pulsa CAPTURAR, espera 5s y escanea el QR</p>
             </div>
         </header>
 
@@ -62,7 +62,7 @@
                                  aria-live="assertive" 
                                  aria-atomic="true"
                                  aria-label="Cuenta atrás en segundos">
-                                10
+                                5
                             </div>
                             <p class="btn-message" id="countdown-message" aria-live="polite">
                                 Mantén la pose, no te muevas, pronto se capturará tu foto…
@@ -136,7 +136,7 @@
         let countdownInterval = null;
         let currentJobId = null;
         let resetTimeout = null;
-        const COUNTDOWN_DURATION = 10; // 10 segundos
+        const COUNTDOWN_DURATION = 5; // 5 segundos
         const RESET_UI_TIMEOUT = 30000; // 30 segundos (30 minutos = 1800000)
         
         // WebSocket connection
@@ -310,7 +310,7 @@
         // ============================================
         // COUNTDOWN
         // ============================================
-        function startCountdown(duration) {
+        function startCountdown(duration, onComplete) {
             showState(stateCountdown);
             let timeLeft = duration;
             countdownDisplay.textContent = timeLeft;
@@ -338,17 +338,53 @@
                     if (loadingSpinner) {
                         loadingSpinner.classList.add('active');
                     }
-                    
-                    // Mantener el mensaje visible por 10 segundos más antes de mostrar QR
-                    setTimeout(() => {
-                        // Ocultar spinner antes de mostrar QR
+
+                    const completionPromise = typeof onComplete === 'function'
+                        ? Promise.resolve().then(() => onComplete())
+                        : Promise.resolve();
+
+                    completionPromise.catch(() => {
                         if (loadingSpinner) {
                             loadingSpinner.classList.remove('active');
                         }
-                        showQR();
+                    });
+                    
+                    // Mantener el mensaje visible por 10 segundos más antes de mostrar QR
+                    setTimeout(() => {
+                        completionPromise
+                          .then(() => {
+                              // Ocultar spinner antes de mostrar QR
+                              if (loadingSpinner) {
+                                  loadingSpinner.classList.remove('active');
+                              }
+                              showQR();
+                          })
+                          .catch(() => {
+                              // El flujo de error ya fue manejado en onComplete
+                          });
                     }, 10000); // 10 segundos adicionales con el mensaje
                 }
             }, 1000);
+        }
+
+        async function triggerCaptureAfterCountdown() {
+            try {
+                const resp = await fetch('/api/capture', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!resp.ok) {
+                    throw new Error('capture_request_failed');
+                }
+
+                const data = await resp.json();
+                currentJobId = data.jobId;
+            } catch (error) {
+                showError('No se pudo iniciar la captura. Reintenta.');
+                captureBtn.disabled = false;
+                throw error;
+            }
         }
 
         // ============================================
@@ -485,6 +521,7 @@
             if (captureBtn.disabled) return;
             
             captureBtn.disabled = true;
+            currentJobId = null;
             // Iniciando captura
             
             // Trigger murciélagos desde el botón (MUCHOS al hacer click)
@@ -493,27 +530,9 @@
                 const centerY = window.innerHeight / 2;
                 wavesAnimation.triggerBats(centerX, centerY, 'high');
             }
-            
-            // Enviar mensaje WebSocket a TouchDesigner
-            const captureMessage = {
-                type: 'capture',
-                timestamp: Date.now(),
-                countdownSec: COUNTDOWN_DURATION
-            };
-            
-            // Intentar enviar por WebSocket, si falla el backend lo manejará vía POST
-            sendWebSocketMessage(captureMessage);
-            
-            // También hacer POST /api/capture para crear el jobId
-            // (El backend también enviará el mensaje WebSocket, pero es redundante si ya lo enviamos aquí)
-            // Por ahora mantenemos el POST para mantener compatibilidad
-            fetch('/api/capture', {method:'POST',headers:{'Content-Type':'application/json'}})
-            .then(r=>r.json())
-            .then(data=>{ currentJobId = data.jobId; })
-            .catch(()=>{})
-            .finally(()=>{
-                startCountdown(COUNTDOWN_DURATION);
-            });
+
+            // Iniciar cuenta atrás y, al llegar a 0, lanzar la captura hacia el backend/TouchDesigner
+            startCountdown(COUNTDOWN_DURATION, triggerCaptureAfterCountdown);
         }
 
         // ============================================
