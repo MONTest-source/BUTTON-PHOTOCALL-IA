@@ -7,6 +7,12 @@ let resetTimeout = null;
 const COUNTDOWN_DURATION = 5; // 5 segundos
 const RESET_UI_TIMEOUT = 30000; // 30 segundos (30 minutos = 1800000)
 
+// Drive sync delay (Google Drive Desktop puede tardar en reflejar el archivo)
+// Puedes tunearlo en runtime con ?sync=15000 en la URL del kiosk.
+const DRIVE_SYNC_DELAY_MS = Number(new URLSearchParams(window.location.search).get('sync')) || 15000;
+let driveSyncInterval = null;
+let driveSyncActive = false;
+
 // WebSocket connection
 let wsConnection = null;
 // WebSocket URL - Se adapta automáticamente a HTTP/HTTPS y ws/wss
@@ -79,7 +85,13 @@ function buildQrSrc(jobId, qrUrl = DEFAULT_QR_URL) {
     return `${base}${sep}jobId=${jid}&t=${Date.now()}`;
 }
 
-function showReadyState(qrUrlFromServer) {
+function clearDriveSyncTimers() {
+    if (driveSyncInterval) clearInterval(driveSyncInterval);
+    driveSyncInterval = null;
+    driveSyncActive = false;
+}
+
+function showReadyNow(qrUrlFromServer) {
     // En este proyecto el QR es fijo a carpeta, así que siempre podemos mostrarlo.
     qrCodeImg.src = buildQrSrc(currentJobId, qrUrlFromServer);
     showState(stateReady);
@@ -92,10 +104,59 @@ function showReadyState(qrUrlFromServer) {
         setTimeout(() => qrContainer.classList.remove('qr-appearing'), 2000);
     }
 
-    // Rearm reset
+    // Rearm reset (desde que el QR ya es visible)
     if (resetTimeout) clearTimeout(resetTimeout);
     resetTimeout = setTimeout(() => resetUI(), RESET_UI_TIMEOUT);
 }
+
+function startDriveSyncHold(qrUrlFromServer) {
+    // Evitar reinicios por eventos duplicados
+    if (driveSyncActive) return;
+    driveSyncActive = true;
+
+    // UI: mantenemos el estado de procesando y damos “aire” a Drive para sincronizar
+    showState(stateCountdown);
+
+    // Asegurar que el contador esté visible (en procesando lo ocultamos)
+    if (countdownDisplay) {
+        countdownDisplay.style.display = 'block';
+    }
+
+    if (loadingSpinner) {
+        loadingSpinner.classList.add('active');
+    }
+
+    const targetTs = Date.now() + DRIVE_SYNC_DELAY_MS;
+
+    const tick = () => {
+        const msLeft = Math.max(0, targetTs - Date.now());
+        const sLeft = Math.ceil(msLeft / 1000);
+
+        if (countdownDisplay) {
+            countdownDisplay.textContent = String(sLeft);
+            countdownDisplay.setAttribute('aria-label', `Sincronizando: ${sLeft} segundos`);
+        }
+        if (countdownMessage) {
+            countdownMessage.textContent = `Sincronizando con Drive… ${sLeft}s`;
+        }
+
+        if (msLeft <= 0) {
+            clearDriveSyncTimers();
+            if (loadingSpinner) loadingSpinner.classList.remove('active');
+            showReadyNow(qrUrlFromServer);
+        }
+    };
+
+    tick();
+    driveSyncInterval = setInterval(tick, 1000);
+}
+
+function showReadyState(qrUrlFromServer) {
+    // Si ya estamos en ready, no hagas nada (evita “rebotes” de WS + polling)
+    if (stateReady && !stateReady.classList.contains('hidden')) return;
+    startDriveSyncHold(qrUrlFromServer);
+}
+
 
 const toastContainer = document.getElementById('toast-container');
 
@@ -128,6 +189,7 @@ function resetUI() {
     setTimeout(() => {
         clearInterval(countdownInterval);
         clearTimeout(resetTimeout);
+        clearDriveSyncTimers();
         countdownInterval = null;
         resetTimeout = null;
         if (countdownDisplay) {
@@ -260,20 +322,15 @@ function startCountdown(duration, onComplete) {
                 }
             });
             
-            // Mantener el mensaje visible por 10 segundos más antes de mostrar QR
-            setTimeout(() => {
-                completionPromise
-                  .then(() => {
-                      // Ocultar spinner antes de mostrar QR
-                      if (loadingSpinner) {
-                          loadingSpinner.classList.remove('active');
-                      }
-                      showQR();
-                  })
-                  .catch(() => {
-                      // El flujo de error ya fue manejado en onComplete
-                  });
-            }, 10000); // 10 segundos adicionales con el mensaje
+            // Arrancar polling de estado como fallback (si el WS falla)
+            completionPromise
+              .then(() => {
+                  // No apagamos el spinner aquí: seguimos en 'procesando' hasta que llegue READY
+                  showQR();
+              })
+              .catch(() => {
+                  // El flujo de error ya fue manejado en onComplete
+              });
         }
     }, 1000);
 }
@@ -302,6 +359,7 @@ async function triggerCaptureAfterCountdown() {
 // GENERATE AND SHOW QR
 // ============================================
 function showQR(){
+    if (driveSyncActive) return;
     // Necesitamos currentJobId del /api/capture
     if(!currentJobId){
         // fallback visual si algo falló
@@ -344,6 +402,7 @@ function showQR(){
 // ERROR HANDLING
 // ============================================
 function showError(message) {
+    clearDriveSyncTimers();
     showState(stateError);
     showToast(message, 'error');
 }
@@ -440,6 +499,7 @@ function handleCaptureClick() {
     if (captureBtn.disabled) return;
     
     captureBtn.disabled = true;
+    clearDriveSyncTimers();
     currentJobId = null;
     // Iniciando captura
     
