@@ -16,6 +16,7 @@ const DRIVE_PARENT_FOLDER_ID = process.env.DRIVE_PARENT_FOLDER_ID; // Tu ID de c
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
+const FALLBACK_QR_URL = process.env.FALLBACK_QR_URL || 'https://drive.google.com/drive/folders/129rHzcKt_iJdfKLS9eim05wiYw_pfpMO';
 
 if (!PUBLIC_BASE_URL || !DRIVE_PARENT_FOLDER_ID || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REFRESH_TOKEN) {
   console.error('Faltan variables: PUBLIC_BASE_URL, DRIVE_PARENT_FOLDER_ID, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN.');
@@ -135,9 +136,10 @@ wss.on('connection', (ws, req) => {
         const pct = Math.max(0, Math.min(1, Number(progress) || 0));
         const next = { ...job, progress: pct };
 
-        // Si el progreso llega al 100%, marcar como ready
-        if (pct >= 1 && job.downloadUrl) {
+        // Si llega a 100%, marca ready y usa URL fallback si no hay aún downloadUrl real.
+        if (pct >= 1) {
           next.status = 'ready';
+          next.downloadUrl = next.downloadUrl || FALLBACK_QR_URL;
         } else {
           next.status = 'processing';
         }
