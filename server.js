@@ -1,5 +1,3 @@
-// server.js — Photocall (OAuth de Usuario + Google Drive) – Node 18+ (ESM)
-
 import express from 'express';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,34 +11,24 @@ import { createServer } from 'http';
 // CONFIG (ENV VARS)
 // -----------------------------
 const PORT = process.env.PORT || 3000;
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL;           // p.ej. https://www.mappingon.es
-const DRIVE_PARENT_FOLDER_ID = process.env.DRIVE_PARENT_FOLDER_ID; // Photocall root (en tu caso: 129rHzcKt_iJdfKLS9eim05wiYw_pfpMO)
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL; // Ejemplo: https://www.mappingon.es
+const DRIVE_PARENT_FOLDER_ID = process.env.DRIVE_PARENT_FOLDER_ID; // Tu ID de carpeta en Google Drive
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
 
-if (
-  !PUBLIC_BASE_URL ||
-  !DRIVE_PARENT_FOLDER_ID ||
-  !GOOGLE_CLIENT_ID ||
-  !GOOGLE_CLIENT_SECRET ||
-  !GOOGLE_REFRESH_TOKEN
-) {
-  console.error(
-    'Faltan variables: PUBLIC_BASE_URL, DRIVE_PARENT_FOLDER_ID, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN.'
-  );
+if (!PUBLIC_BASE_URL || !DRIVE_PARENT_FOLDER_ID || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REFRESH_TOKEN) {
+  console.error('Faltan variables: PUBLIC_BASE_URL, DRIVE_PARENT_FOLDER_ID, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN.');
   process.exit(1);
 }
 
 // -----------------------------
 // STATE (Jobs)
-// En multi-instancia: usa Redis.
 // -----------------------------
 const jobs = new Map(); // jobId -> { status, downloadUrl?, createdAt, error? }
 
 // -----------------------------
-// GOOGLE DRIVE (OAuth2 de usuario, SIN Service Account)
-// redirect_uri debe coincidir con tu client_secret (p.ej. "http://localhost").
+// GOOGLE DRIVE (OAuth2 de usuario)
 // -----------------------------
 let drive;
 try {
@@ -91,7 +79,7 @@ async function uploadImageToFolder(driveClient, folderId, filename, buffer, mime
   const { data } = await driveClient.files.create({
     requestBody: { name: filename, parents: [folderId] },
     media: { mimeType, body: Readable.from(buffer) },
-    fields: 'id, webContentLink, webViewLink',
+    fields: 'id, webContentLink, webViewLink', // Links de Google Drive
   });
   return data;
 }
@@ -117,7 +105,7 @@ const upload = multer({
 });
 
 app.use(express.json());
-app.use(express.static('public')); // sirve la UI del botón si la tienes en /public
+app.use(express.static('public'));
 
 // -----------------------------
 // HTTP + WEBSOCKET (TouchDesigner)
@@ -145,21 +133,18 @@ wss.on('connection', (ws, req) => {
         if (!job) return;
 
         const pct = Math.max(0, Math.min(1, Number(progress) || 0));
-        const next = {
-          ...job,
-          progress: pct,
-        };
+        const next = { ...job, progress: pct };
 
-        // Si aún no hay URL, no podemos marcar ready; seguimos en processing
+        // Si el progreso llega al 100%, marcar como ready
         if (pct >= 1 && job.downloadUrl) {
           next.status = 'ready';
-        } else if (job.status === 'pending' || job.status === 'ready') {
+        } else {
           next.status = 'processing';
         }
 
         jobs.set(jobId, next);
 
-        // Aviso por WebSocket a los clientes conectados (si aplica)
+        // Avisar al frontend de los cambios
         broadcastToTouchDesigner({
           type: 'progress',
           jobId,
@@ -167,13 +152,12 @@ wss.on('connection', (ws, req) => {
           status: next.status,
           downloadUrl: next.downloadUrl,
         });
-        return;
       }
 
       console.log('[WS] Mensaje:', data);
       ws.send(JSON.stringify({ type: 'ack', received: data }));
     } catch (e) {
-      console.error('[WS] Mensaje inválido:', e);
+      console.error('[WS] Error en mensaje:', e);
       ws.send(JSON.stringify({ type: 'error', message: 'Formato no válido' }));
     }
   });
@@ -189,6 +173,7 @@ wss.on('connection', (ws, req) => {
   });
 });
 
+// Broadcast a todos los clientes conectados
 function broadcastToTouchDesigner(message) {
   const payload = JSON.stringify(message);
   let sent = 0;
