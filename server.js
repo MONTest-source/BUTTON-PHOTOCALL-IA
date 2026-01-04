@@ -17,6 +17,9 @@ const DRIVE_FOLDER_URL =
   process.env.DRIVE_FOLDER_URL ||
   "https://drive.google.com/drive/folders/129rHzcKt_iJdfKLS9eim05wiYw_pfpMO";
 
+// Ruta local del QR (sirve un PNG que apunta a la carpeta Drive)
+const QR_URL_PATH = "/qr.png";
+
 // Threshold para dar “listo”
 const DONE_THRESHOLD = 0.99;
 
@@ -119,7 +122,7 @@ wss.on("connection", (ws, req) => {
 
       // Ready: emitir solo cuando cruza el umbral (evita spam)
       if (prev.status !== "ready" && nextStatus === "ready") {
-        broadcast({ type: "ready", jobId, url: DRIVE_FOLDER_URL });
+        broadcast({ type: "ready", jobId, url: DRIVE_FOLDER_URL, qrUrl: QR_URL_PATH });
       }
       return;
     }
@@ -151,16 +154,16 @@ app.post("/api/capture", (req, res) => {
   // Avisar a TouchDesigner (y quien esté conectado)
   broadcast({ type: "capture", jobId, countdownSec: 5, ts: Date.now() });
 
-  res.status(202).json({ jobId, countdownSec: 5 });
+  res.status(202).json({ jobId, countdownSec: 5, qrUrl: QR_URL_PATH, url: DRIVE_FOLDER_URL });
 });
 
 // (Debug only) Estado del job
 app.get("/api/status/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) return res.status(404).json({ error: "Job not found" });
-  res.json(job);
+  // Siempre devolvemos también dónde está el QR (fijo) y la carpeta de descarga.
+  res.json({ ...job, qrUrl: QR_URL_PATH, url: DRIVE_FOLDER_URL });
 });
-
 // -----------------------------
 // GC (limpiar jobs viejos)
 // -----------------------------

@@ -65,6 +65,38 @@ const countdownDisplay = document.getElementById('countdown-display');
 const countdownMessage = document.getElementById('countdown-message');
 const loadingSpinner = document.getElementById('loading-spinner');
 const qrCodeImg = document.getElementById('qr-code-img');
+
+// ============================================
+// READY → MOSTRAR QR (QR fijo a carpeta Drive)
+// ============================================
+const DEFAULT_QR_URL = '/qr.png';
+
+function buildQrSrc(jobId, qrUrl = DEFAULT_QR_URL) {
+    const base = qrUrl || DEFAULT_QR_URL;
+    // Cache-bust para kiosks/Chrome kiosk (evita PNG cacheado)
+    const sep = base.includes('?') ? '&' : '?';
+    const jid = jobId ? encodeURIComponent(jobId) : 'na';
+    return `${base}${sep}jobId=${jid}&t=${Date.now()}`;
+}
+
+function showReadyState(qrUrlFromServer) {
+    // En este proyecto el QR es fijo a carpeta, así que siempre podemos mostrarlo.
+    qrCodeImg.src = buildQrSrc(currentJobId, qrUrlFromServer);
+    showState(stateReady);
+    showToast('Tu foto está lista', 'success');
+
+    // Animación existente
+    const qrContainer = document.querySelector('.btn-qr-container');
+    if (qrContainer) {
+        qrContainer.classList.add('qr-appearing');
+        setTimeout(() => qrContainer.classList.remove('qr-appearing'), 2000);
+    }
+
+    // Rearm reset
+    if (resetTimeout) clearTimeout(resetTimeout);
+    resetTimeout = setTimeout(() => resetUI(), RESET_UI_TIMEOUT);
+}
+
 const toastContainer = document.getElementById('toast-container');
 
 // ============================================
@@ -273,17 +305,8 @@ function showQR(){
         fetch(`/api/status/${currentJobId}`)
           .then(r=>r.json())
           .then(s=>{
-            if(s.status==='ready' && s.qrPngDataUrl){
-                qrCodeImg.src = s.qrPngDataUrl;
-                showState(stateReady);
-                showToast('Tu foto está lista', 'success');
-                // animación existente
-                const qrContainer = document.querySelector('.btn-qr-container');
-                if (qrContainer) {
-                    qrContainer.classList.add('qr-appearing');
-                    setTimeout(() => qrContainer.classList.remove('qr-appearing'), 2000);
-                }
-                resetTimeout = setTimeout(()=>resetUI(), RESET_UI_TIMEOUT);
+            if(s.status==='ready'){
+                showReadyState(s.qrUrl);
             } else if(s.status==='failed'){
                 showState(stateError);
                 showError(s.error || 'Fallo procesando tu foto.');
@@ -357,11 +380,8 @@ function connectWebSocket() {
                 }
 
                 // Listo: recibir QR por WebSocket (si el backend lo envía)
-                if (data.type === 'ready' && sameJob && data.qrPngDataUrl) {
-                    qrCodeImg.src = data.qrPngDataUrl;
-                    showState(stateReady);
-                    showToast('Tu foto está lista', 'success');
-                    resetTimeout = setTimeout(()=>resetUI(), RESET_UI_TIMEOUT);
+                if (data.type === 'ready' && sameJob) {
+                    showReadyState(data.qrUrl);
                     return;
                 }
             } catch (error) {
