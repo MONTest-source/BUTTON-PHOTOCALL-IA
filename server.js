@@ -1,236 +1,182 @@
-import express from 'express';
-import multer from 'multer';
-import { v4 as uuidv4 } from 'uuid';
-import QRCode from 'qrcode';
-import { google } from 'googleapis';
-import { Readable } from 'stream';
-import { createServer } from 'http';
+// server.js — Photocall IA (Opción 1: QR fijo a carpeta Drive + progreso por WS)
+// Node 18+ (ESM)
+
+import express from "express";
+import { createServer } from "http";
+import { WebSocketServer } from "ws";
+import { v4 as uuidv4 } from "uuid";
+import QRCode from "qrcode";
 
 // -----------------------------
-// CONFIG (ENV VARS)
+// CONFIG
 // -----------------------------
 const PORT = process.env.PORT || 3000;
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL; // Ejemplo: https://www.mappingon.es
-const DRIVE_PARENT_FOLDER_ID = process.env.DRIVE_PARENT_FOLDER_ID; // Tu ID de carpeta en Google Drive
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
-const FALLBACK_QR_URL = 'https://drive.google.com/drive/folders/129rHzcKt_iJdfKLS9eim05wiYw_pfpMO'; // Tu URL de Google Drive
 
-if (!PUBLIC_BASE_URL || !DRIVE_PARENT_FOLDER_ID || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REFRESH_TOKEN) {
-  console.error('Faltan variables: PUBLIC_BASE_URL, DRIVE_PARENT_FOLDER_ID, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN.');
-  process.exit(1);
-}
+// QR fijo (tu carpeta)
+const DRIVE_FOLDER_URL =
+  process.env.DRIVE_FOLDER_URL ||
+  "https://drive.google.com/drive/folders/129rHzcKt_iJdfKLS9eim05wiYw_pfpMO";
+
+// Threshold para dar “listo”
+const DONE_THRESHOLD = 0.99;
 
 // -----------------------------
-// STATE (Jobs)
+// STATE (Jobs in-memory)
 // -----------------------------
-const jobs = new Map(); // jobId -> { status, downloadUrl?, createdAt, error? }
-
-// -----------------------------
-// GOOGLE DRIVE (OAuth2 de usuario)
-// -----------------------------
-let drive;
-try {
-  const oAuth2 = new google.auth.OAuth2(
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    'http://localhost'
-  );
-  oAuth2.setCredentials({ refresh_token: GOOGLE_REFRESH_TOKEN });
-  drive = google.drive({ version: 'v3', auth: oAuth2 });
-  console.log('Google Drive (OAuth) autenticado.');
-} catch (err) {
-  console.error('Error configurando OAuth Drive:', err?.message || err);
-  process.exit(1);
-}
+const jobs = new Map(); // jobId -> { status, progress, createdAt }
 
 // -----------------------------
-// HELPERS DRIVE
-// -----------------------------
-async function ensureFolder(driveClient, name, parentId) {
-  const q = [
-    `'${parentId}' in parents`,
-    `name='${name.replace(/'/g, "\\'")}'`,
-    "mimeType='application/vnd.google-apps.folder'",
-    'trashed=false',
-  ].join(' and ');
-
-  const { data } = await driveClient.files.list({
-    q,
-    fields: 'files(id,name)',
-    pageSize: 1,
-  });
-
-  if (data.files?.length) return data.files[0].id;
-
-  const { data: created } = await driveClient.files.create({
-    requestBody: {
-      name,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: [parentId],
-    },
-    fields: 'id',
-  });
-  return created.id;
-}
-
-async function uploadImageToFolder(driveClient, folderId, filename, buffer, mimeType) {
-  const { data } = await driveClient.files.create({
-    requestBody: { name: filename, parents: [folderId] },
-    media: { mimeType, body: Readable.from(buffer) },
-    fields: 'id, webContentLink, webViewLink', // Links de Google Drive
-  });
-  return data;
-}
-
-async function makeAnyoneReader(driveClient, fileId) {
-  await driveClient.permissions.create({
-    fileId,
-    requestBody: { role: 'reader', type: 'anyone' },
-  });
-}
-
-// -----------------------------
-// EXPRESS + MULTER + STATIC
+// EXPRESS + STATIC
 // -----------------------------
 const app = express();
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
-  fileFilter: (req, file, cb) => {
-    const ok = ['image/jpeg', 'image/png'].includes(file.mimetype);
-    cb(ok ? null : new Error('Invalid file type. Only JPEG and PNG are allowed.'), ok);
-  },
+app.use(express.json());
+app.use(express.static("public"));
+
+// Healthcheck
+app.get("/health", (req, res) => res.json({ ok: true }));
+
+// -----------------------------
+// QR PNG (cached)
+// -----------------------------
+let qrPngBuffer = null;
+
+async function buildQrOnce() {
+  qrPngBuffer = await QRCode.toBuffer(DRIVE_FOLDER_URL, {
+    errorCorrectionLevel: "H",
+    margin: 2,
+    width: 320,
+  });
+  console.log("[QR] Generado /qr.png ->", DRIVE_FOLDER_URL);
+}
+
+app.get("/qr.png", async (req, res) => {
+  try {
+    if (!qrPngBuffer) await buildQrOnce();
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(qrPngBuffer);
+  } catch (e) {
+    console.error("[QR] Error generando qr.png:", e);
+    res.status(500).send("QR error");
+  }
 });
 
-app.use(express.json());
-app.use(express.static('public'));
+// -----------------------------
+// HTTP + WEBSOCKET
+// -----------------------------
+const server = createServer(app);
+const wss = new WebSocketServer({ server });
+const clients = new Set();
+
+function broadcast(obj) {
+  const payload = JSON.stringify(obj);
+  let sent = 0;
+  for (const c of clients) {
+    if (c.readyState === 1) {
+      try {
+        c.send(payload);
+        sent++;
+      } catch { }
+    }
+  }
+  return sent;
+}
+
+wss.on("connection", (ws, req) => {
+  const ip = req.socket.remoteAddress;
+  clients.add(ws);
+
+  ws.send(JSON.stringify({ type: "connected", message: "Conectado al servidor Photocall" }));
+  console.log(`[WS] Cliente conectado: ${ip} (total ${clients.size})`);
+
+  ws.on("message", (raw) => {
+    let data;
+    try {
+      data = JSON.parse(raw.toString());
+    } catch {
+      ws.send(JSON.stringify({ type: "error", message: "JSON inválido" }));
+      return;
+    }
+
+    // ---- PROGRESS desde TouchDesigner ----
+    if (data.type === "progress") {
+      const jobId = data.jobId;
+      const p = Math.max(0, Math.min(1, Number(data.progress ?? 0)));
+
+      if (!jobId || !jobs.has(jobId)) {
+        // Ignorar progreso huérfano
+        return;
+      }
+
+      const prev = jobs.get(jobId);
+      const nextStatus = p >= DONE_THRESHOLD ? "ready" : "processing";
+      const next = { ...prev, status: nextStatus, progress: p };
+
+      jobs.set(jobId, next);
+
+      // Rebroadcast al navegador (y a quien esté conectado)
+      broadcast({ type: "progress", jobId, progress: p });
+
+      // Ready: emitir solo cuando cruza el umbral (evita spam)
+      if (prev.status !== "ready" && nextStatus === "ready") {
+        broadcast({ type: "ready", jobId, url: DRIVE_FOLDER_URL });
+      }
+      return;
+    }
+
+    // ---- ACK opcional (debug) ----
+    if (data.type === "started" || data.type === "cancel") {
+      ws.send(JSON.stringify({ type: "ack", received: data }));
+      return;
+    }
+  });
+
+  ws.on("close", () => {
+    clients.delete(ws);
+    console.log(`[WS] Cliente cerrado: ${ip} (total ${clients.size})`);
+  });
+
+  ws.on("error", () => {
+    clients.delete(ws);
+  });
+});
 
 // -----------------------------
 // API
 // -----------------------------
-app.post('/api/capture', (req, res) => {
+app.post("/api/capture", (req, res) => {
   const jobId = uuidv4();
-  jobs.set(jobId, { status: 'pending', createdAt: Date.now() });
-  console.log(`[${jobId}] Job creado.`);
+  jobs.set(jobId, { status: "pending", progress: 0, createdAt: Date.now() });
 
-  // Enviar el progreso como 0 (proceso iniciado)
+  // Avisar a TouchDesigner (y quien esté conectado)
+  broadcast({ type: "capture", jobId, countdownSec: 5, ts: Date.now() });
+
   res.status(202).json({ jobId, countdownSec: 5 });
 });
 
-app.post('/api/upload/:jobId', upload.single('file'), async (req, res) => {
-  const { jobId } = req.params;
-
-  if (!jobs.has(jobId)) return res.status(404).json({ error: 'Job not found' });
-  if (!req.file) return res.status(400).json({ error: 'File is required' });
-
-  console.log(`[${jobId}] Imagen recibida (${req.file.mimetype}). Subiendo a Drive...`);
-
-  try {
-    const now = new Date();
-    const yyyy = `${now.getFullYear()}`;
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-
-    const yearId = await ensureFolder(drive, yyyy, DRIVE_PARENT_FOLDER_ID);
-    const monthId = await ensureFolder(drive, mm, yearId);
-    const dayId = await ensureFolder(drive, dd, monthId);
-    const jobFolderId = await ensureFolder(drive, jobId, dayId);
-
-    const ext = req.file.mimetype === 'image/png' ? 'png' : 'jpg';
-    const filename = `final.${ext}`;
-
-    const file = await uploadImageToFolder(
-      drive,
-      jobFolderId,
-      filename,
-      req.file.buffer,
-      req.file.mimetype
-    );
-
-    await makeAnyoneReader(drive, file.id);
-
-    const prev = jobs.get(jobId) || {};
-    jobs.set(jobId, {
-      ...prev,
-      status: 'ready',
-      progress: 1,
-      downloadUrl: file.webViewLink || file.webContentLink, // Enlace de descarga
-      driveFileId: file.id,
-      createdAt: prev.createdAt,
-    });
-
-    console.log(`[${jobId}] Subida OK. URL: ${file.webViewLink || file.webContentLink}`);
-    res.json({ ok: true });
-  } catch (error) {
-    console.error(`[${jobId}] Error subida Drive:`, error);
-    jobs.set(jobId, { status: 'failed', error: error.message, createdAt: jobs.get(jobId).createdAt });
-    const msg = (error.code && error.errors)
-      ? 'Error con el servicio de almacenamiento. Revisa configuración.'
-      : 'No se pudo subir la foto (error interno).';
-    res.status(500).json({ error: msg });
-  }
-});
-
-app.get('/api/status/:jobId', async (req, res) => {
-  const { jobId } = req.params;
-  const job = jobs.get(jobId);
-  if (!job) return res.status(404).json({ error: 'Job not found' });
-
-  if (job.status === 'pending') return res.json({ status: 'pending' });
-
-  if (job.status === 'ready') {
-    const redirectUrl = `${PUBLIC_BASE_URL}/d/${jobId}`;
-    try {
-      const qrPngDataUrl = await QRCode.toDataURL(redirectUrl, {
-        errorCorrectionLevel: 'H',
-        margin: 2,
-        width: 280,
-      });
-      return res.json({
-        status: 'ready',
-        qrPngDataUrl,
-        redirectUrl,
-        progress: job.progress ?? 1,
-      });
-    } catch (e) {
-      console.error(`[${jobId}] Error generando QR:`, e);
-      return res.status(500).json({ error: 'Could not generate QR code' });
-    }
-  }
-
-  return res.json({ status: job.status, error: job.error, progress: job.progress ?? 0 });
-});
-
-app.get('/d/:jobId', (req, res) => {
-  const { jobId } = req.params;
-  const job = jobs.get(jobId);
-  if (job && job.status === 'ready' && job.downloadUrl) {
-    console.log(`[${jobId}] Redirect -> ${job.downloadUrl}`);
-    return res.redirect(302, job.downloadUrl);
-  }
-  return res.status(404).send('<h1>Foto no encontrada o no está lista.</h1>');
+// (Debug only) Estado del job
+app.get("/api/status/:jobId", (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  res.json(job);
 });
 
 // -----------------------------
-// GC de jobs
+// GC (limpiar jobs viejos)
 // -----------------------------
 setInterval(() => {
   const now = Date.now();
-  const TTL = 60 * 60 * 1000; // 1 hora
+  const TTL = 60 * 60 * 1000; // 1h
   for (const [jobId, job] of jobs.entries()) {
-    if (now - (job.createdAt || now) > TTL) {
-      jobs.delete(jobId);
-      console.log(`[${jobId}] Job limpiado de memoria.`);
-    }
+    if (now - (job.createdAt || now) > TTL) jobs.delete(jobId);
   }
 }, 5 * 60 * 1000);
 
 // -----------------------------
 // START
 // -----------------------------
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
+  await buildQrOnce();
   console.log(`HTTP  : http://localhost:${PORT}`);
   console.log(`WS    : ws://localhost:${PORT}`);
 });
