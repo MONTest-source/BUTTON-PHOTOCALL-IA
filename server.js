@@ -137,6 +137,30 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (msg) => {
     try {
       const data = JSON.parse(msg.toString());
+      if (data?.type === 'progress') {
+        const { jobId, progress } = data || {};
+        if (!jobId) return;
+
+        const job = jobs.get(jobId);
+        if (!job) return;
+
+        const pct = Math.max(0, Math.min(1, Number(progress) || 0));
+        const next = {
+          ...job,
+          progress: pct,
+        };
+
+        // Si aún no hay URL, no podemos marcar ready; seguimos en processing
+        if (pct >= 1 && job.downloadUrl) {
+          next.status = 'ready';
+        } else if (job.status === 'pending' || job.status === 'ready') {
+          next.status = 'processing';
+        }
+
+        jobs.set(jobId, next);
+        return;
+      }
+
       console.log('[WS] Mensaje:', data);
       ws.send(JSON.stringify({ type: 'ack', received: data }));
     } catch (e) {
@@ -248,14 +272,19 @@ app.get('/api/status/:jobId', async (req, res) => {
         margin: 2,
         width: 280,
       });
-      return res.json({ status: 'ready', qrPngDataUrl, redirectUrl });
+      return res.json({
+        status: 'ready',
+        qrPngDataUrl,
+        redirectUrl,
+        progress: job.progress ?? 1,
+      });
     } catch (e) {
       console.error(`[${jobId}] Error generando QR:`, e);
       return res.status(500).json({ error: 'Could not generate QR code' });
     }
   }
 
-  return res.json({ status: job.status, error: job.error });
+  return res.json({ status: job.status, error: job.error, progress: job.progress ?? 0 });
 });
 
 app.get('/d/:jobId', (req, res) => {
